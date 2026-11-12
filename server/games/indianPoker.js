@@ -109,6 +109,10 @@ class IndianPoker extends MemoryPoker {
       hands, winners, pot: this.pot, share, ante: this.ante,
       uncontested: live.length === 1, final: this.isGameOver(),
     };
+    this.room.onRound?.(hands.map((h) => ({
+      id: h.id, won: winners.includes(h.id), card: h.folded ? 0 : h.value,
+      net: (winners.includes(h.id) ? share : 0) - this.ante - h.bet - h.penalty,
+    })), 'indian');
     this.pot = 0;
     this.setPhase('showdown', CFG.showdownMs, () => this.afterShowdown());
   }

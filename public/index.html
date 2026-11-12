@@ -13,7 +13,11 @@
 </head>
 <body>
   <canvas id="bg" aria-hidden="true"></canvas>
-  <button class="lang-toggle lang-fixed">EN</button>
+  <nav class="lobby-nav">
+    <button id="rankBtn" class="nav-btn"><span aria-hidden="true">🏆</span> <span data-i18n="nav.rank">랭킹</span></button>
+    <button id="meBtn" class="nav-btn"><span class="nav-avatar avatar" id="navAvatar"></span> <span data-i18n="nav.me">마이페이지</span></button>
+    <button class="lang-toggle">EN</button>
+  </nav>
 
   <!-- ===== LOBBY ===== -->
   <main id="lobby" class="screen active">
@@ -253,6 +257,59 @@
     </div>
   </div>
 
+  <!-- ===== RANKING ===== -->
+  <div id="rankPanel" class="overlay sheet-overlay" role="dialog" aria-modal="true" aria-labelledby="rankTitle">
+    <div class="sheet">
+      <header class="sheet-head">
+        <h2 id="rankTitle"><span aria-hidden="true">🏆</span> <span data-i18n="rank.title">랭킹</span></h2>
+        <button class="icon-btn" data-close data-i18n-label="close"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/></svg></button>
+      </header>
+      <div class="tabs" id="rankTabs">
+        <button data-g="memory" data-i18n="game.memory">기억 포커</button>
+        <button data-g="shuffle" data-i18n="game.shuffle">셔플 메모리</button>
+        <button data-g="nut" data-i18n="game.nut">너트 레이스</button>
+        <button data-g="indian" data-i18n="game.indian">인디언 포커</button>
+      </div>
+      <div class="rank-list" id="rankList"></div>
+      <div class="rank-me" id="rankMe"></div>
+      <p class="sheet-note" data-i18n="rank.note"></p>
+    </div>
+  </div>
+
+  <!-- ===== MY PAGE ===== -->
+  <div id="mePanel" class="overlay sheet-overlay" role="dialog" aria-modal="true" aria-labelledby="meTitle">
+    <div class="sheet">
+      <header class="sheet-head">
+        <h2 id="meTitle" data-i18n="me.title">마이페이지</h2>
+        <button class="icon-btn" data-close data-i18n-label="close"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/></svg></button>
+      </header>
+      <section class="me-profile">
+        <div class="me-avatar avatar" id="meAvatar"></div>
+        <div class="me-fields">
+          <label class="field"><span data-i18n="me.name">닉네임</span>
+            <div class="me-name-row"><input id="meName" maxlength="12" /><button class="btn gold" id="meSave" data-i18n="me.save">저장</button></div>
+          </label>
+        </div>
+      </section>
+      <section>
+        <h3 class="me-h" data-i18n="me.photo">프로필 사진</h3>
+        <div class="avatar-grid" id="avatarGrid"></div>
+        <label class="btn ghost upload-btn"><span aria-hidden="true">📷</span> <span data-i18n="me.upload">사진 올리기</span>
+          <input type="file" id="avatarFile" accept="image/*" hidden /></label>
+      </section>
+      <section>
+        <h3 class="me-h" data-i18n="me.stats">게임별 기록</h3>
+        <div class="stat-cards" id="statCards"></div>
+      </section>
+      <section class="transfer">
+        <h3 class="me-h" data-i18n="me.transfer">계정 이전 코드</h3>
+        <p class="sheet-note" data-i18n="me.transferHint"></p>
+        <div class="code-row"><input id="myCode" readonly value="••••••••••••" /><button class="btn ghost" id="showCode" data-i18n="me.show">보기</button><button class="btn ghost" id="copyCode" data-i18n="me.copy">복사</button></div>
+        <div class="code-row"><input id="importCode" data-i18n-ph="me.import" placeholder="코드로 불러오기" /><button class="btn gold" id="importBtn" data-i18n="me.importBtn">불러오기</button></div>
+      </section>
+    </div>
+  </div>
+
   <!-- ===== TUTORIAL ===== -->
   <div id="tutorial" class="overlay" role="dialog" aria-modal="true" aria-labelledby="tutTitle">
     <div class="result-card tut-card">
@@ -281,5 +338,6 @@
   <script src="app.js"></script>
   <script src="chat.js"></script>
   <script src="tutorial.js"></script>
+  <script src="profile.js"></script>
 </body>
 </html>

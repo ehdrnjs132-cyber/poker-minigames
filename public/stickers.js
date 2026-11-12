@@ -42,15 +42,15 @@ const Stickers = (() => {
     }
   }
 
-  function cat({ eyes: e = 'dot', mouth: m = 'w', gray = false, pose = '', t = '' } = {}) {
-    const fill = gray ? '#a19ca8' : '#fff';
-    const ink = gray ? '#3b3540' : INK;
+  function cat({ eyes: e = 'dot', mouth: m = 'w', gray = false, pose = '', t = '', fill: f, ink: k } = {}) {
+    const fill = f || (gray ? '#a19ca8' : '#fff');
+    const ink = k || (gray ? '#3b3540' : INK);
     const inner = gray ? '#f0b9c4' : '#ffc9d3';
-    const paws = pose === 'wave'
+    const paws = pose === 'head' ? '' : pose === 'wave'
       ? `<ellipse cx="46" cy="98" rx="8" ry="6" fill="${fill}"/><ellipse cx="94" cy="70" rx="7.5" ry="6.5" fill="${fill}"/><path d="M101 58q5 4 4 10M106 54q7 6 5 15" fill="none" stroke-width="2"/>`
       : `<ellipse cx="47" cy="98" rx="8" ry="6" fill="${fill}"/><ellipse cx="73" cy="98" rx="8" ry="6" fill="${fill}"/>`;
     return `<g ${t ? `transform="${t}"` : ''} stroke="${ink}" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round">
-      <ellipse cx="60" cy="92" rx="27" ry="13" fill="${fill}"/>
+      ${pose === 'head' ? '' : `<ellipse cx="60" cy="92" rx="27" ry="13" fill="${fill}"/>`}
       <path d="M27 54Q22 27 47 37Z" fill="${fill}"/><path d="M93 54Q98 27 73 37Z" fill="${fill}"/>
       <ellipse cx="60" cy="67" rx="38" ry="30" fill="${fill}"/>
       <path d="M31 47Q29 34 42 39Z" fill="${inner}" stroke="none"/><path d="M89 47Q91 34 78 39Z" fill="${inner}" stroke="none"/>
@@ -96,7 +96,21 @@ const Stickers = (() => {
       ${s.svg()}${txt(60, 20, label, 19, INK)}</svg>`;
   }
 
-  return { list: LIST, svg, has: (id) => !!BY_ID[id], label: (id) => (BY_ID[id] ? labelOf(BY_ID[id]) : '') };
+  // Profile picture presets: the same cat in different colours and moods.
+  const AVATARS = [
+    { bg: '#ffd6e0', eyes: 'dot' }, { bg: '#c9e7ff', eyes: 'happy' }, { bg: '#fff1b8', eyes: 'big' },
+    { bg: '#d8f5e3', eyes: 'heart' }, { bg: '#e6dcff', eyes: 'squint', mouth: 'open' }, { bg: '#ffe0c2', eyes: 'sleep' },
+    { bg: '#b9c3d9', eyes: 'dot', fill: '#a19ca8', ink: '#3b3540' }, { bg: '#ffd1a8', eyes: 'happy', fill: '#ffb36b' },
+    { bg: '#3a4a7a', eyes: 'big', fill: '#4a4458', ink: '#1e1a26' }, { bg: '#fbe3ff', eyes: 'shock', mouth: 'o' },
+    { bg: '#cfeee9', eyes: 'angry', mouth: 'small', fill: '#f5ead8' }, { bg: '#ffeaa0', eyes: 'happy', mouth: 'open', fill: '#ffcf70' },
+  ];
+  function avatar(id) {
+    const a = AVATARS[Number(String(id).slice(1))] || AVATARS[0];
+    return `<svg class="avatar-svg" viewBox="14 24 92 92" aria-hidden="true"><rect x="14" y="24" width="92" height="92" fill="${a.bg}"/>
+      ${cat({ eyes: a.eyes, mouth: a.mouth, fill: a.fill, ink: a.ink, pose: 'head', t: 'translate(0 8)' })}</svg>`;
+  }
+
+  return { list: LIST, svg, avatar, avatarIds: AVATARS.map((_, i) => `p${i}`), has: (id) => !!BY_ID[id], label: (id) => (BY_ID[id] ? labelOf(BY_ID[id]) : '') };
 })();
 
 window.Stickers = Stickers;

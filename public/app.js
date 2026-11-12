@@ -41,6 +41,14 @@
   }
   const botFace = () =>
     '<svg viewBox="0 0 24 24" width="60%" height="60%" aria-hidden="true"><rect x="4" y="7" width="16" height="12" rx="4" fill="#fff"/><circle cx="9" cy="13" r="1.8" fill="#1b2a5c"/><circle cx="15" cy="13" r="1.8" fill="#1b2a5c"/><path d="M12 7V4" stroke="#fff" stroke-width="2" stroke-linecap="round"/><circle cx="12" cy="3.5" r="1.6" fill="#fff"/></svg>';
+  // Profile picture inside an .avatar circle: bot face, uploaded photo, preset cat, or initial.
+  function avatarInner(p) {
+    if (!p) return '?';
+    if (p.bot) return botFace();
+    if (p.avatar === 'img' && p.uid) return `<img src="/avatar/${p.uid}?v=${p.avatarV || 0}" alt="" loading="lazy">`;
+    if (p.avatar && /^p\d+$/.test(p.avatar)) return Stickers.avatar(p.avatar);
+    return esc((p.name || '?')[0]);
+  }
   function setHTML(el, html) {
     if (el._html === html) return false;
     el._html = html;
@@ -74,7 +82,31 @@
     f.innerHTML = faceHTML(code) + (letter ? `<span class="flabel">${letter}</span>` : '');
   }
   window.cardHTML = cardHTML; // shared with tutorial.js
-  window.HA = { socket, toast, me: () => S?.me || session.get()?.playerId }; // shared with chat.js
+  // Shared with chat.js / profile.js.
+  let ME = null; // my public profile { id, name, avatar, avatarV }
+  window.HA = {
+    socket, toast, esc, fmt, setHTML,
+    me: () => S?.me || session.get()?.playerId,
+    profile: () => ME,
+    setProfile: (u) => { ME = u; renderNavMe(); if (S) render(); },
+    avatarInner: (p) => avatarInner(p),
+    credentials: () => ({ uid: pref.get('uid'), token: pref.get('utok') }),
+    useCredentials: (uid, token) => { pref.set('uid', uid); pref.set('utok', token); },
+  };
+  function renderNavMe() {
+    const el = $('#navAvatar');
+    if (el && ME) el.innerHTML = avatarInner({ ...ME, uid: ME.id });
+  }
+  function hello() {
+    socket.emit('hello', { uid: pref.get('uid'), token: pref.get('utok'), name: pref.get('name') }, (res) => {
+      if (!res?.ok) return;
+      pref.set('uid', res.uid);
+      pref.set('utok', res.token);
+      ME = res.user;
+      if (!nameInput.value && ME.name && ME.name !== 'Player') nameInput.value = ME.name;
+      renderNavMe();
+    });
+  }
 
   // Force a style flush so a class change right after insertion still transitions.
   const reflow = (el) => void el.offsetWidth;
@@ -94,6 +126,10 @@
       return null;
     }
     pref.set('name', n);
+    if (ME && ME.name !== n) {
+      ME.name = n;
+      socket.emit('profile:update', { name: n }, () => {});
+    }
     return n;
   }
 
@@ -252,6 +288,7 @@
   // ------------------------------------------------------------- socket
   socket.on('connect', () => {
     $('#netState').classList.remove('show');
+    hello(); // first, so rooms see who we are
     const s = session.get();
     if (!s) return handleInvite();
     socket.emit('join', { code: s.code, playerId: s.playerId, name: pref.get('name') }, (res) => {
@@ -452,7 +489,7 @@
 
     setHTML(el, `
       ${removeBtn}${dealer}
-      <div class="avatar${p.connected ? '' : ' off'}${p.bot ? ' bot' : ''}" style="background:${colorFor(p.id)}">${p.bot ? botFace() : esc(p.name[0] || '?')}</div>
+      <div class="avatar${p.connected ? '' : ' off'}${p.bot ? ' bot' : ''}" style="background:${colorFor(p.id)}">${avatarInner(p)}</div>
       <div class="who">
         <div class="name">${esc(p.name)}${isMe ? `<em>${t('me')}</em>` : ''}${botTag}</div>
         <div class="chips"><span class="chip-icon"></span>${fmt(p.chips)} ${delta}</div>
@@ -509,7 +546,7 @@
     const removeBtn = p.bot && ph === 'lobby' ? `<button class="seat-x" data-act="removeBot" data-id="${p.id}" aria-label="${t('bot.remove')}" title="${t('bot.remove')}">×</button>` : '';
     setHTML(el, `
       ${removeBtn}${dealer}
-      <div class="avatar${p.connected ? '' : ' off'}${p.bot ? ' bot' : ''}" style="background:${colorFor(p.id)}">${p.bot ? botFace() : esc(p.name[0] || '?')}</div>
+      <div class="avatar${p.connected ? '' : ' off'}${p.bot ? ' bot' : ''}" style="background:${colorFor(p.id)}">${avatarInner(p)}</div>
       <div class="who">
         <div class="name">${esc(p.name)}${isMe ? `<em>${t('me')}</em>` : ''}${botTag}</div>
         <div class="chips"><span class="chip-icon"></span>${fmt(p.chips)} ${delta}</div>
@@ -805,7 +842,7 @@
       const own = new Set(wHand.cards);
       cards = wHand.best.map((c, i) => cardHTML(c, '', { cls: `sp-card${own.has(c) ? ' own' : ''}`, style: `--i:${i}` })).join('');
     }
-    const avatars = winners.map((w) => `<div class="sp-avatar" style="background:${colorFor(w.id)}">${w.bot ? botFace() : esc(w.name[0] || '?')}</div>`).join('');
+    const avatars = winners.map((w) => `<div class="sp-avatar" style="background:${colorFor(w.id)}">${avatarInner(w)}</div>`).join('');
     const mine = !iWon && myDetail ? `<div class="sp-mine">${t('sp.yours')}: <b>${esc(myDetail)}</b></div>` : '';
 
     el.className = `spotlight show${iWon ? ' me' : ''}${split ? ' split' : ''}`;
@@ -1001,8 +1038,13 @@
     const draw = championId === null;
     const title = draw ? t('go.draw') : won ? t('go.win') : t('go.lose');
     const reasonText = reason === 'bust' ? t('go.bust') : t('go.rounds', { n: S.maxRounds });
-    const rows = standings.map((s, i) =>
-      `<div class="${i === 0 && !draw ? 'top' : ''}"><span class="rk">${i + 1}</span><span class="nm">${esc(s.name)}${s.id === S.me ? t('meSuffix') : ''}${s.bot ? ` <small class="bot-tag">BOT·${t(`lvl.${s.bot}`)}</small>` : ''}</span><span class="ch">${fmt(s.chips)}</span></div>`).join('');
+    const ratingOf = (pid) => (S.final.ratings || []).find((r) => r.pid === pid);
+    const rows = standings.map((s, i) => {
+      const r = ratingOf(s.id);
+      const pts = r ? `<span class="rp ${r.delta >= 0 ? 'up' : 'down'}">${r.delta >= 0 ? '+' : ''}${r.delta}</span>` : '';
+      return `<div class="${i === 0 && !draw ? 'top' : ''}"><span class="rk">${i + 1}</span><span class="nm">${esc(s.name)}${s.id === S.me ? t('meSuffix') : ''}${s.bot ? ` <small class="bot-tag">BOT·${t(`lvl.${s.bot}`)}</small>` : ''}</span>${pts}<span class="ch">${fmt(s.chips)}</span></div>`;
+    }).join('');
+    const myRating = ratingOf(S.me);
     const others = S.players.filter((p) => p.id !== S.me);
     const readyCount = S.players.filter((p) => p.ready).length;
     const waiting = !others.length ? t('go.oppGone')
@@ -1013,6 +1055,7 @@
         <div class="trophy">${draw ? '🤝' : won ? '🏆' : '🃏'}</div>
         <h2 class="${won || draw ? '' : 'lose'}">${title}</h2>
         <p class="reason">${reasonText}</p>
+        ${myRating ? `<div class="go-rating ${myRating.delta >= 0 ? 'up' : 'down'}">${t('go.rating', { d: `${myRating.delta >= 0 ? '+' : ''}${myRating.delta}`, r: fmt(myRating.rating) })}</div>` : ''}
         <div class="standings">${rows}</div>
         <div class="result-actions">
           <button class="btn ghost" data-act="exit">${t('act.exit')}</button>

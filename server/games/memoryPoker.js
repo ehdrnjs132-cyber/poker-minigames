@@ -601,6 +601,10 @@ class MemoryPoker {
       hands, winners, pot: this.pot, share, ante: this.ante,
       uncontested: live.length === 1 && hands.length > 1, final: willEnd, ...this.extraResult(hands),
     };
+    this.room.onRound?.(hands.map((h) => ({
+      id: h.id, won: winners.includes(h.id), score: h.folded ? null : h.score,
+      net: (winners.includes(h.id) ? share : 0) - this.ante - h.bet,
+    })), this.constructor.meta.id);
     this.pot = 0;
     this.setPhase('showdown', CFG.showdownMs, () => this.afterShowdown());
   }
@@ -623,6 +627,7 @@ class MemoryPoker {
     const bust = standings.some((s) => s.chips <= 0);
     this.final = { standings, championId, reason: bust ? 'bust' : 'rounds' };
     for (const p of this.players) this.ps.get(p.id).ready = !!p.bot;
+    this.final.ratings = this.room.onFinish?.(standings, this.constructor.meta.id) || [];
     this.setPhase('gameover', 0);
   }
 

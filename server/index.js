@@ -11,6 +11,8 @@ const GAMES = {
   indian: require('./games/indianPoker'),
 };
 const Bots = require('./bots');
+const store = require('./store');
+const profiles = require('./profiles');
 
 const PORT = process.env.PORT || 3000;
 const ROOM_IDLE_MS = 3 * 60 * 1000;
@@ -22,6 +24,16 @@ const CHAT_WINDOW_MS = 4000;
 const app = express();
 app.use(express.static(path.join(__dirname, '..', 'public')));
 app.get('/healthz', (_req, res) => res.send('ok'));
+
+// Uploaded profile photos (stored as data URLs) served as real images.
+app.get('/avatar/:id', (req, res) => {
+  const data = profiles.image(String(req.params.id).replace(/[^a-f0-9]/g, ''));
+  const m = data && data.match(/^data:(image\/[a-z]+);base64,(.+)$/);
+  if (!m) return res.status(404).end();
+  res.set('Content-Type', m[1]);
+  res.set('Cache-Control', 'public, max-age=86400'); // URLs carry ?v= so updates bust the cache
+  res.send(Buffer.from(m[2], 'base64'));
+});
 
 const server = http.createServer(app);
 const io = new Server(server);
@@ -48,6 +60,14 @@ function createRoom(gameId, settings) {
   const room = { code: genCode(), gameId, players: [], chat: [], chatSeq: 0, cleanupTimer: null };
   room.broadcast = () => { broadcast(room); announceRooms(); };
   room.postChat = (msg) => postChat(room, msg);
+  // Records: game players → profiles (bots have no userId and aren't recorded).
+  const userOf = (pid) => room.players.find((p) => p.id === pid)?.userId || null;
+  room.onRound = (entries, game) => profiles.recordRound(game, entries.map((e) => ({ ...e, userId: userOf(e.id) })));
+  room.onFinish = (standings, game) => {
+    // Equal chip counts share a place.
+    const entries = standings.map((s) => ({ userId: userOf(s.id), place: 1 + standings.filter((o) => o.chips > s.chips).length, chips: s.chips, pid: s.id }));
+    return profiles.recordGame(game, entries).map((r) => ({ ...r, pid: entries.find((e) => e.userId === r.userId)?.pid }));
+  };
   room.game = new Game(room, settings && typeof settings === 'object' ? settings : {});
   rooms.set(room.code, room);
   return room;
@@ -55,15 +75,12 @@ function createRoom(gameId, settings) {
 
 function broadcast(room) {
   const now = Date.now();
+  const faces = new Map(room.players.map((p) => [p.id, { uid: p.userId || null, avatar: p.avatar || null, avatarV: p.avatarV || 0 }]));
   for (const p of room.players) {
     if (!p.socketId) continue;
-    io.to(p.socketId).emit('state', {
-      now,
-      code: room.code,
-      gameId: room.gameId,
-      me: p.id,
-      ...room.game.viewFor(p.id),
-    });
+    const view = room.game.viewFor(p.id);
+    for (const vp of view.players) Object.assign(vp, faces.get(vp.id));
+    io.to(p.socketId).emit('state', { now, code: room.code, gameId: room.gameId, me: p.id, ...view });
   }
 }
 
@@ -149,6 +166,41 @@ io.on('connection', (socket) => {
   socket.join('lobby');
   socket.emit('rooms', roomList());
 
+  // ---- profile (no password: browser-held id + token) ----
+  let uid = null;
+  socket.on('hello', (payload, ack) => {
+    const res = profiles.hello(payload || {});
+    if (res.invalid) return reply(ack, { ok: false, code: 'me.badCode' });
+    uid = res.uid;
+    reply(ack, { ok: true, ...res });
+  });
+
+  socket.on('profile:update', (patch, ack) => {
+    if (!uid || !patch || typeof patch !== 'object') return reply(ack, { ok: false, code: 'srv.noProfile' });
+    const res = profiles.update(uid, patch);
+    if (res.error) return reply(ack, { ok: false, code: res.error });
+    // Refresh seats in any room this profile is sitting in.
+    for (const room of rooms.values()) {
+      let touched = false;
+      for (const p of room.players) {
+        if (p.userId !== uid) continue;
+        p.avatar = res.user.avatar;
+        p.avatarV = res.user.avatarV;
+        touched = true;
+      }
+      if (touched) room.broadcast();
+    }
+    reply(ack, { ok: true, user: res.user });
+  });
+
+  socket.on('ranking', (game, ack) => reply(ack, { ok: true, ...profiles.leaderboard(String(game), uid) }));
+  socket.on('me', (_x, ack) => reply(ack, uid ? { ok: true, ...profiles.myStats(uid) } : { ok: false }));
+
+  const makePlayer = (name) => {
+    const u = profiles.getUser(uid);
+    return { id: crypto.randomUUID(), name: cleanName(name || u?.name), userId: uid, avatar: u?.avatar || null, avatarV: u?.avatarV || 0, connected: true, socketId: null };
+  };
+
   // Invite links ask what they're joining before the player commits.
   socket.on('roomInfo', (code, ack) => {
     const room = rooms.get(String(code || '').toUpperCase());
@@ -175,6 +227,11 @@ io.on('connection', (socket) => {
     ctx = null;
     socket.join('lobby');
     socket.emit('rooms', roomList());
+    // Walking out of a game in progress counts as finishing last.
+    const phase = room.game.phase;
+    if (!['lobby', 'gameover'].includes(phase) && !room.game.ps.get(player.id)?.out) {
+      profiles.recordAbandon(room.gameId, player.userId, room.players.length);
+    }
     room.players = room.players.filter((p) => p !== player);
     room.game.onLeave(player.id, player.name);
     if (!room.players.some((p) => !p.bot)) return destroyRoom(room);
@@ -204,7 +261,7 @@ io.on('connection', (socket) => {
   socket.on('create', ({ name, gameId, settings } = {}, ack) => {
     const room = createRoom(gameId, settings);
     if (!room) return reply(ack, { ok: false, code: 'srv.noGame' });
-    const player = { id: crypto.randomUUID(), name: cleanName(name), connected: true, socketId: null };
+    const player = makePlayer(name);
     room.players.push(player);
     room.game.onJoin(player);
     reply(ack, { ok: true, code: room.code, playerId: player.id });
@@ -224,7 +281,7 @@ io.on('connection', (socket) => {
       const full = room.players.length >= room.game.maxPlayers;
       return reply(ack, { ok: false, code: full ? 'srv.full' : 'srv.inProgress' });
     }
-    const player = { id: crypto.randomUUID(), name: cleanName(name), connected: true, socketId: null };
+    const player = makePlayer(name);
     room.players.push(player);
     room.game.onJoin(player);
     reply(ack, { ok: true, code: room.code, playerId: player.id });
@@ -253,6 +310,10 @@ io.on('connection', (socket) => {
   });
 });
 
-server.listen(PORT, () => {
-  console.log(`Holdem Arcade listening on http://localhost:${PORT}`);
-});
+store.init()
+  .catch((e) => {
+    console.error('Database unavailable, falling back to file storage:', e.message);
+    store.pool = null;
+    store.backend = 'file';
+  })
+  .finally(() => server.listen(PORT, () => console.log(`Holdem Arcade listening on http://localhost:${PORT}`)));
