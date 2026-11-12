@@ -536,6 +536,39 @@
     [...b.querySelectorAll('.card')].forEach((c) => c.classList.toggle('hl', inResult && hlCards.has(c.dataset.code)));
   }
 
+  const cmpScore = (a, b) => {
+    for (let i = 0; i < Math.max(a.length, b.length); i++) {
+      const d = (a[i] || 0) - (b[i] || 0);
+      if (d) return d;
+    }
+    return 0;
+  };
+  const secsBetween = (a, b) => (Math.abs(a - b) / 1000).toFixed(1);
+
+  // One line explaining a close result: speed tie-break (Nut Race) or kicker.
+  function outcomeReason() {
+    const r = S.result;
+    const mine = r?.hands.find((h) => h.id === S.me);
+    if (!mine || r.winners.length > 1) return '';
+    const handName = I18N.hand(mine.score);
+    const nameOf = (id) => S.players.find((p) => p.id === id)?.name || '';
+    if (!r.winners.includes(S.me)) {
+      const w = r.hands.find((h) => h.id === r.winners[0]);
+      if (cmpScore(mine.score, w.score) === 0) {
+        if (mine.lockedAt == null) return t('why.noLock');
+        return t('why.slower', { name: nameOf(w.id), n: secsBetween(mine.lockedAt, w.lockedAt) });
+      }
+      return I18N.hand(w.score) === handName ? t('why.kicker', { hand: handName }) : '';
+    }
+    const others = r.hands.filter((h) => h.id !== S.me);
+    const sameHand = others.filter((h) => cmpScore(h.score, mine.score) === 0);
+    if (sameHand.length) {
+      const times = sameHand.map((h) => h.lockedAt).filter((x) => x != null);
+      return times.length ? t('why.faster', { n: secsBetween(Math.min(...times), mine.lockedAt) }) : t('why.fasterNoLock');
+    }
+    return others.some((h) => I18N.hand(h.score) === handName) ? t('why.kickerWin', { hand: handName }) : '';
+  }
+
   function renderStatus({ me, opp }) {
     const ph = S.phase;
     const nut = S.game === 'nut';
@@ -563,7 +596,7 @@
       reveal: S.game === 'shuffle' ? t('sub.revealShuffle') : t('sub.reveal'),
       shuffle: t('sub.shuffle'),
       pick: nut ? t('sub.nutPick') : t('sub.pick'),
-      showdown: S.result ? t('sub.pot', { n: fmt(S.result.pot) }) : '',
+      showdown: S.result ? outcomeReason() || t('sub.pot', { n: fmt(S.result.pot) }) : '',
       gameover: '',
     };
     $('#phaseLabel').textContent = labels[ph] || '';
@@ -578,7 +611,8 @@
       const kind = split ? 'split' : won ? 'win' : 'lose';
       const title = split ? 'SPLIT' : won ? 'WIN!' : 'LOSE';
       banner.className = `banner ${kind}`;
-      banner.innerHTML = `${title}<small>${esc(I18N.hand(myHand?.score))}</small>`;
+      const why = outcomeReason();
+      banner.innerHTML = `${title}<small>${esc(I18N.hand(myHand?.score))}</small>${why ? `<small class="why">${esc(why)}</small>` : ''}`;
       clearTimeout(bannerTimer);
       bannerTimer = setTimeout(() => {
         banner.classList.add('show');

@@ -312,6 +312,7 @@ input { font: inherit; }
   transition: opacity .3s, transform .4s cubic-bezier(.2, 1.5, .4, 1); z-index: 5; text-align: center; line-height: 1.05;
 }
 .banner small { display: block; font-family: var(--font); font-weight: 900; font-size: .26em; letter-spacing: .02em; color: #fff; margin-top: 4px; }
+.banner small.why { font-size: .2em; font-weight: 700; color: #ffe7a6; margin-top: 6px; white-space: normal; max-width: 80vw; }
 .banner.show { opacity: 1; transform: translate(-50%, -50%) scale(1); }
 .banner.win { color: var(--gold); text-shadow: 0 0 30px rgba(245, 196, 81, .8), 0 4px 0 #6b450c, 0 8px 20px rgba(0, 0, 0, .7); }
 .banner.lose { color: #b9c6e6; text-shadow: 0 4px 0 #1a2448, 0 8px 20px rgba(0, 0, 0, .7); }
