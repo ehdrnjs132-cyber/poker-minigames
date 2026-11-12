@@ -1,0 +1,160 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>Holdem Arcade</title>
+  <meta name="description" content="친구들과 함께하는 포커 룰 미니게임" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Black+Han+Sans&family=Noto+Sans+KR:wght@400;500;700;900&family=Oswald:wght@500;600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="style.css" />
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Cpath fill='%23f5c451' d='M32 4C22 18 8 24 8 38c0 8 6 13 13 13 4 0 7-2 9-4-1 5-3 9-6 13h16c-3-4-5-8-6-13 2 2 5 4 9 4 7 0 13-5 13-13C56 24 42 18 32 4z'/%3E%3C/svg%3E" />
+</head>
+<body>
+  <canvas id="bg" aria-hidden="true"></canvas>
+
+  <!-- ===== LOBBY ===== -->
+  <main id="lobby" class="screen active">
+    <header class="brand">
+      <svg class="emblem" viewBox="0 0 200 170" aria-hidden="true">
+        <defs>
+          <linearGradient id="gGold" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0" stop-color="#fff2b8" />
+            <stop offset=".45" stop-color="#f5c451" />
+            <stop offset="1" stop-color="#9a6614" />
+          </linearGradient>
+          <linearGradient id="gRed" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0" stop-color="#e3283a" />
+            <stop offset="1" stop-color="#7a0612" />
+          </linearGradient>
+        </defs>
+        <path d="M100 8 L176 34 V84 C176 124 142 148 100 162 C58 148 24 124 24 84 V34 Z" fill="url(#gGold)" />
+        <path d="M100 20 L164 42 V84 C164 117 136 138 100 150 C64 138 36 117 36 84 V42 Z" fill="#0a1638" />
+        <path transform="translate(70 26) scale(.6)" d="M50 5 C35 30 5 42 5 65 C5 80 18 90 31 90 C40 90 46 85 48 80 C47 88 43 95 36 100 H64 C57 95 53 88 52 80 C54 85 60 90 69 90 C82 90 95 80 95 65 C95 42 65 30 50 5Z" fill="url(#gGold)" />
+        <rect x="14" y="96" width="172" height="34" rx="6" fill="url(#gRed)" stroke="url(#gGold)" stroke-width="3" />
+        <text x="100" y="120" text-anchor="middle" font-family="Oswald, sans-serif" font-weight="700" font-size="20" letter-spacing="3" fill="#fff4cf">HOLDEM ARCADE</text>
+      </svg>
+      <p class="tagline">친구들과 함께하는 포커 룰 미니게임</p>
+    </header>
+
+    <section class="panel">
+      <label class="field">
+        <span>닉네임</span>
+        <input id="nameInput" maxlength="12" autocomplete="nickname" placeholder="닉네임을 입력하세요" />
+      </label>
+
+      <h2 class="section-title">게임 선택 <small>방을 만들고 친구를 초대하세요</small></h2>
+      <div class="games">
+        <button class="game-card" data-game="memory">
+          <div class="gc-art">
+            <span class="mini-card back">A</span><span class="mini-card mface red">A<i>♥</i></span><span class="mini-card back">C</span>
+          </div>
+          <div class="gc-body">
+            <b>기억 포커</b>
+            <p>16장을 제한 시간 동안 외우고, 알파벳 2장을 골라 최강의 족보를 만드세요.</p>
+            <span class="gc-meta">2인 · 약 5분</span>
+          </div>
+          <span class="gc-cta">방 만들기</span>
+        </button>
+        <button class="game-card locked" data-game="soon1" aria-disabled="true">
+          <div class="gc-art dim"><span class="mini-card back">?</span><span class="mini-card back">?</span></div>
+          <div class="gc-body"><b>너트 레이스</b><p>준비 중인 게임입니다.</p><span class="gc-meta">COMING SOON</span></div>
+        </button>
+        <button class="game-card locked" data-game="soon2" aria-disabled="true">
+          <div class="gc-art dim"><span class="mini-card back">?</span><span class="mini-card back">?</span></div>
+          <div class="gc-body"><b>아웃츠 헌터</b><p>준비 중인 게임입니다.</p><span class="gc-meta">COMING SOON</span></div>
+        </button>
+      </div>
+
+      <div class="join">
+        <input id="codeInput" maxlength="4" placeholder="방 코드" autocomplete="off" spellcheck="false" />
+        <button id="joinBtn" class="btn gold">참가하기</button>
+      </div>
+    </section>
+  </main>
+
+  <!-- ===== ROOM ===== -->
+  <main id="room" class="screen">
+    <div class="topbar">
+      <button id="leaveBtn" class="icon-btn" title="나가기" aria-label="나가기">
+        <svg viewBox="0 0 24 24"><path d="M15 6l-6 6 6 6" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      </button>
+      <button id="codeChip" class="code-chip" title="초대 링크 복사">ROOM <b id="roomCode">----</b>
+        <svg viewBox="0 0 24 24"><rect x="8" y="8" width="12" height="12" rx="2" fill="none" stroke="currentColor" stroke-width="2"/><path d="M16 8V5a1 1 0 0 0-1-1H5a1 1 0 0 0-1 1v10a1 1 0 0 0 1 1h3" fill="none" stroke="currentColor" stroke-width="2"/></svg>
+      </button>
+      <div class="info-chips">
+        <span class="chip-info"><em>ROUND</em><b id="roundInfo">-</b></span>
+        <span class="chip-info"><em>ANTE</em><b id="anteInfo">-</b></span>
+      </div>
+      <button id="muteBtn" class="icon-btn" title="소리" aria-label="소리 켜기/끄기"></button>
+    </div>
+
+    <div class="stage">
+      <div id="seatOpp" class="seat opp"></div>
+
+      <div class="table">
+        <div class="rail"></div>
+        <div class="felt">
+          <div class="felt-logo" aria-hidden="true">HOLDEM ARCADE</div>
+          <div class="status">
+            <div class="timer" id="timer">
+              <svg viewBox="0 0 44 44"><circle class="track" cx="22" cy="22" r="19"/><circle class="bar" cx="22" cy="22" r="19"/></svg>
+              <span id="timerNum"></span>
+            </div>
+            <div class="status-text">
+              <b id="phaseLabel"></b>
+              <span id="phaseSub"></span>
+            </div>
+            <div class="pot"><span class="chip-icon"></span><b id="potInfo">0</b></div>
+          </div>
+          <div class="board" id="board"></div>
+          <div class="grid" id="grid"></div>
+          <div class="banner" id="banner"></div>
+        </div>
+      </div>
+
+      <div id="seatMe" class="seat me"></div>
+      <div id="actionBar" class="action-bar"></div>
+    </div>
+
+    <div id="overlay" class="overlay"></div>
+    <div id="netState" class="net-state">서버에 다시 연결하는 중…</div>
+  </main>
+
+  <!-- ===== CREATE-ROOM SETTINGS ===== -->
+  <div id="setup" class="overlay" role="dialog" aria-modal="true" aria-labelledby="setupTitle">
+    <div class="result-card setup-card">
+      <h2 id="setupTitle">방 설정</h2>
+      <p class="reason">기억 포커 · 2인</p>
+      <div class="setting">
+        <div class="setting-head"><b>기억 시간</b><span><em id="memVal">30</em>초</span></div>
+        <div class="seg" data-key="memorizeSec">
+          <button data-v="10">10</button><button data-v="15">15</button><button data-v="20">20</button>
+          <button data-v="30">30</button><button data-v="45">45</button><button data-v="60">60</button>
+        </div>
+        <input type="range" min="5" max="90" step="1" data-key="memorizeSec" aria-label="기억 시간(초)" />
+      </div>
+      <div class="setting">
+        <div class="setting-head"><b>선택 시간</b><span><em id="pickVal">20</em>초</span></div>
+        <div class="seg" data-key="pickSec">
+          <button data-v="10">10</button><button data-v="15">15</button><button data-v="20">20</button>
+          <button data-v="30">30</button><button data-v="45">45</button><button data-v="60">60</button>
+        </div>
+        <input type="range" min="5" max="60" step="1" data-key="pickSec" aria-label="선택 시간(초)" />
+      </div>
+      <div class="result-actions">
+        <button class="btn ghost" id="setupCancel">취소</button>
+        <button class="btn gold big" id="setupCreate">방 만들기</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="toast" class="toast" role="status" aria-live="polite"></div>
+
+  <script src="/socket.io/socket.io.js"></script>
+  <script src="sfx.js"></script>
+  <script src="bg.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
