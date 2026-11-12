@@ -1,8 +1,7 @@
-(() => {
+﻿(() => {
   const socket = io();
   const $ = (s) => document.querySelector(s);
   const SUIT = { s: '♠', h: '♥', d: '♦', c: '♣' };
-  const LETTERS = 'ABCDEFGHIJKLMNOP';
   const AVATAR_COLORS = ['#3a7bff', '#e3283a', '#14a37f', '#a14bff', '#ff8a1f', '#e0359b', '#1fb6d6'];
 
   const session = {
@@ -72,6 +71,8 @@
     f.className = 'face front' + ('hd'.includes(code[1]) ? ' red' : '');
     f.innerHTML = faceHTML(code) + (letter ? `<span class="flabel">${letter}</span>` : '');
   }
+  window.cardHTML = cardHTML; // shared with tutorial.js
+
   // Force a style flush so a class change right after insertion still transitions.
   const reflow = (el) => void el.offsetWidth;
 
@@ -311,9 +312,9 @@
       const idx = p.picks ? p.picks[k] : undefined;
       if (hand) {
         const code = hand.cards[k];
-        hole += cardHTML(code, LETTERS[hand.picks[k]], { cls: `pop${hlCards.has(code) ? ' hl' : ''}`, style: `--dd:${k * 120}ms` });
+        hole += cardHTML(code, '', { cls: `pop${hlCards.has(code) ? ' hl' : ''}`, style: `--dd:${k * 120}ms` });
       } else if (idx !== undefined) {
-        hole += cardHTML(null, LETTERS[idx], { down: true });
+        hole += cardHTML(null, '', { down: true });
       } else if (!p.picks && k < p.pickCount) {
         hole += cardHTML(null, '?', { down: true });
       } else {
@@ -338,7 +339,7 @@
       dealKey = S.dealId;
       g.innerHTML = '';
       for (let i = 0; i < 16; i++) {
-        const c = makeCard(LETTERS[i]);
+        const c = makeCard('');
         c.style.setProperty('--dd', `${i * 28}ms`);
         if (S.phase !== 'lobby') c.classList.add('deal-in');
         c.insertAdjacentHTML('beforeend', '<div class="tag"></div>');
@@ -354,7 +355,7 @@
 
     [...g.children].forEach((el, i) => {
       const info = S.grid[i];
-      if (info?.card) setFace(el, info.card, info.letter);
+      if (info?.card) setFace(el, info.card);
       const wantDown = !info?.card;
       if (el.classList.contains('down') !== wantDown) {
         let d;
@@ -414,7 +415,7 @@
       lobby: opp ? '준비하면 시작합니다' : '상대를 기다리는 중',
       memorize: '카드를 기억하세요!',
       reveal: '카드가 뒤집힙니다',
-      pick: '알파벳 2장을 고르세요',
+      pick: '카드 2장을 고르세요',
       showdown: '쇼다운',
       gameover: '게임 종료',
     };
@@ -422,9 +423,9 @@
     const pickSec = Math.round(S.durations.pick / 1000);
     const subs = {
       lobby: `${opp ? '두 명 모두 준비하면 시작' : `방 코드 ${S.code} 를 친구에게 알려주세요`} · 기억 ${memSec}초 / 선택 ${pickSec}초`,
-      memorize: `${memSec}초 뒤 카드가 알파벳으로 뒤집힙니다`,
+      memorize: `${memSec}초 뒤 카드가 뒤집힙니다. 위치를 외우세요!`,
       reveal: '공유 카드 5장이 깔립니다',
-      pick: '같은 알파벳을 골라도 괜찮아요',
+      pick: '위치를 떠올려 고르세요 · 상대와 같은 카드도 가능',
       showdown: S.result ? `팟 ${fmt(S.result.pot)}` : '',
       gameover: '',
     };
@@ -459,7 +460,8 @@
     const ph = S.phase;
     let html = '';
     if (ph === 'lobby') {
-      html = `${!opp ? '<button class="btn ghost" data-act="invite">초대 링크 복사</button>' : ''}
+      html = `<button class="btn ghost" data-tutorial>게임 방법</button>
+        ${!opp ? '<button class="btn ghost" data-act="invite">초대 링크 복사</button>' : ''}
         <button class="btn ${me.ready ? 'ghost' : 'gold'} big" data-act="ready">${me.ready ? '준비 취소' : '준비'}</button>`;
     } else if (ph === 'memorize') {
       html = me.memorized

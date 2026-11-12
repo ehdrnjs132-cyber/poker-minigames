@@ -1,4 +1,4 @@
-<!doctype html>
+﻿<!doctype html>
 <html lang="ko">
 <head>
   <meta charset="utf-8" />
@@ -48,11 +48,11 @@
       <div class="games">
         <button class="game-card" data-game="memory">
           <div class="gc-art">
-            <span class="mini-card back">A</span><span class="mini-card mface red">A<i>♥</i></span><span class="mini-card back">C</span>
+            <span class="mini-card back"></span><span class="mini-card mface red">A<i>♥</i></span><span class="mini-card back"></span>
           </div>
           <div class="gc-body">
             <b>기억 포커</b>
-            <p>16장을 제한 시간 동안 외우고, 알파벳 2장을 골라 최강의 족보를 만드세요.</p>
+            <p>16장의 위치를 외우고, 뒤집힌 카드 중 2장을 골라 최강의 족보를 만드세요.</p>
             <span class="gc-meta">2인 · 약 5분</span>
           </div>
           <span class="gc-cta">방 만들기</span>
@@ -66,6 +66,8 @@
           <div class="gc-body"><b>아웃츠 헌터</b><p>준비 중인 게임입니다.</p><span class="gc-meta">COMING SOON</span></div>
         </button>
       </div>
+
+      <button class="tut-link" data-tutorial>처음이신가요? <b>기억 포커 게임 방법 보기 →</b></button>
 
       <div class="join">
         <input id="codeInput" maxlength="4" placeholder="방 코드" autocomplete="off" spellcheck="false" />
@@ -87,6 +89,9 @@
         <span class="chip-info"><em>ROUND</em><b id="roundInfo">-</b></span>
         <span class="chip-info"><em>ANTE</em><b id="anteInfo">-</b></span>
       </div>
+      <button class="icon-btn" data-tutorial title="게임 방법" aria-label="게임 방법">
+        <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9.5" fill="none" stroke="currentColor" stroke-width="2"/><path d="M9.3 9.4a2.8 2.8 0 0 1 5.4 1c0 1.9-2.7 2.3-2.7 4" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><circle cx="12" cy="17.6" r="1.2" fill="currentColor"/></svg>
+      </button>
       <button id="muteBtn" class="icon-btn" title="소리" aria-label="소리 켜기/끄기"></button>
     </div>
 
@@ -126,7 +131,7 @@
   <div id="setup" class="overlay" role="dialog" aria-modal="true" aria-labelledby="setupTitle">
     <div class="result-card setup-card">
       <h2 id="setupTitle">방 설정</h2>
-      <p class="reason">기억 포커 · 2인</p>
+      <p class="reason">기억 포커 · 2인 · <button class="tut-inline" data-tutorial>게임 방법</button></p>
       <div class="setting">
         <div class="setting-head"><b>기억 시간</b><span><em id="memVal">30</em>초</span></div>
         <div class="seg" data-key="memorizeSec">
@@ -150,11 +155,30 @@
     </div>
   </div>
 
+  <!-- ===== TUTORIAL ===== -->
+  <div id="tutorial" class="overlay" role="dialog" aria-modal="true" aria-labelledby="tutTitle">
+    <div class="result-card tut-card">
+      <button class="tut-close icon-btn" id="tutClose" aria-label="닫기">
+        <svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/></svg>
+      </button>
+      <div class="tut-step" id="tutStep"></div>
+      <h2 id="tutTitle"></h2>
+      <div class="tut-stage" id="tutStage"></div>
+      <p class="tut-text" id="tutText"></p>
+      <div class="tut-dots" id="tutDots"></div>
+      <div class="result-actions">
+        <button class="btn ghost" id="tutPrev">이전</button>
+        <button class="btn gold big" id="tutNext">다음</button>
+      </div>
+    </div>
+  </div>
+
   <div id="toast" class="toast" role="status" aria-live="polite"></div>
 
   <script src="/socket.io/socket.io.js"></script>
   <script src="sfx.js"></script>
   <script src="bg.js"></script>
   <script src="app.js"></script>
+  <script src="tutorial.js"></script>
 </body>
 </html>
