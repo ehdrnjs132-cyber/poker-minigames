@@ -39,6 +39,8 @@
     for (const ch of id) h = (h * 31 + ch.charCodeAt(0)) >>> 0;
     return AVATAR_COLORS[h % AVATAR_COLORS.length];
   }
+  const botFace = () =>
+    '<svg viewBox="0 0 24 24" width="60%" height="60%" aria-hidden="true"><rect x="4" y="7" width="16" height="12" rx="4" fill="#fff"/><circle cx="9" cy="13" r="1.8" fill="#1b2a5c"/><circle cx="15" cy="13" r="1.8" fill="#1b2a5c"/><path d="M12 7V4" stroke="#fff" stroke-width="2" stroke-linecap="round"/><circle cx="12" cy="3.5" r="1.6" fill="#fff"/></svg>';
   function setHTML(el, html) {
     if (el._html === html) return false;
     el._html = html;
@@ -107,7 +109,7 @@
   // ---- create-room settings modal (last choice remembered per browser)
   const setupEl = $('#setup');
   let setupGame = null;
-  let settings = { memorizeSec: 30, pickSec: 20, swaps: 5, speed: 'normal' };
+  let settings = { players: 4, memorizeSec: 30, pickSec: 20, swaps: 5, speed: 'normal' };
   try { Object.assign(settings, JSON.parse(pref.get('roomSettings')) || {}); } catch {}
 
   function renderSetup() {
@@ -115,7 +117,7 @@
     $('#pickVal').textContent = settings.pickSec;
     setupEl.querySelectorAll('.seg').forEach((seg) =>
       seg.querySelectorAll('button').forEach((b) => b.classList.toggle('on', b.dataset.v === String(settings[seg.dataset.key]))));
-    setupEl.querySelectorAll('[data-only]').forEach((row) => (row.hidden = row.dataset.only !== setupGame));
+    setupEl.querySelectorAll('[data-only]').forEach((row) => (row.hidden = !row.dataset.only.split(' ').includes(setupGame)));
     $('#setupGameName').textContent = t(`game.${setupGame}`);
     $('#setupTutorial').dataset.tutorial = setupGame;
     setupEl.querySelectorAll('input[type=range]').forEach((r) => (r.value = settings[r.dataset.key]));
@@ -250,8 +252,15 @@
     if (a === 'invite') return copyInvite();
     if (a === 'exit') return $('#leaveBtn').click();
     if (a === 'lock') SFX.lock(); else SFX.click();
-    act(a);
+    act(a, { level: b.dataset.level, id: b.dataset.id });
   }
+  // Bot "remove" buttons live inside opponent seats.
+  $('#opps').addEventListener('click', (e) => {
+    const b = e.target.closest('[data-act="removeBot"]');
+    if (!b) return;
+    SFX.click();
+    act('removeBot', { id: b.dataset.id });
+  });
 
   function onGridClick(i) {
     if (!S || S.phase !== 'pick') return;
@@ -265,20 +274,21 @@
   // ------------------------------------------------------------- render
   function render() {
     const me = S.players.find((p) => p.id === S.me);
-    const opp = S.players.find((p) => p.id !== S.me);
+    const opps = S.players.filter((p) => p.id !== S.me);
+    const opp = opps[0];
     const inResult = S.phase === 'showdown' || S.phase === 'gameover';
     const hlCards = new Set();
     if (inResult && S.result) {
       for (const h of S.result.hands) if (S.result.winners.includes(h.id)) h.best.forEach((c) => hlCards.add(c));
     }
-    const ctx = { me, opp, inResult, hlCards };
+    const ctx = { me, opp, opps, inResult, hlCards };
 
     $('#roomCode').textContent = S.code;
     $('#roundInfo').textContent = S.round ? `${S.round}/${S.maxRounds}` : '-';
     $('#anteInfo').textContent = S.ante ? fmt(S.ante) : '-';
     $('#potInfo').textContent = fmt(inResult && S.result ? S.result.pot : S.pot);
 
-    renderSeat($('#seatOpp'), opp, false, ctx);
+    renderOpps(ctx);
     renderSeat($('#seatMe'), me, true, ctx);
     renderGrid(ctx);
     runShuffle();
@@ -291,23 +301,56 @@
     if (S.notice && JSON.stringify(S.notice) !== JSON.stringify(P?.notice)) toast(I18N.msg(S.notice), 3500);
   }
 
+  // Opponent seats: one per other player, plus empty seats up to the room size in the lobby.
+  function renderOpps(ctx) {
+    const box = $('#opps');
+    const { opps } = ctx;
+    // While seats are open, show one "waiting" placeholder.
+    const empties = S.phase === 'lobby' && opps.length < S.maxPlayers - 1 ? 1 : 0;
+    const wanted = opps.map((p) => p.id);
+    for (let i = 0; i < empties; i++) wanted.push(`empty-${i}`);
+    [...box.children].forEach((el) => !wanted.includes(el.dataset.id) && el.remove());
+    wanted.forEach((id, i) => {
+      let el = box.querySelector(`[data-id="${id}"]`);
+      if (!el) {
+        el = document.createElement('div');
+        el.dataset.id = id;
+      }
+      if (box.children[i] !== el) box.insertBefore(el, box.children[i] || null);
+      renderSeat(el, opps.find((p) => p.id === id) || null, false, ctx);
+    });
+    box.classList.toggle('multi', wanted.length > 1);
+    box.classList.toggle('many', wanted.length > 3);
+  }
+
   function renderSeat(el, p, isMe, { inResult, hlCards }) {
     if (!p) {
       el.className = `seat ${isMe ? 'me' : 'opp'} empty`;
       setHTML(el, `<span class="dots">${t('seat.waiting')}</span>`);
       return;
     }
+    el.dataset.id = p.id;
     const ph = S.phase;
     const hand = inResult && S.result ? S.result.hands.find((h) => h.id === p.id) : null;
     const isWinner = hand && S.result.winners.includes(p.id);
-    el.className = `seat ${isMe ? 'me' : 'opp'}${isWinner ? ' winner' : ''}`;
+    el.className = `seat ${isMe ? 'me' : 'opp'}${isWinner ? ' winner' : ''}${p.out ? ' out' : ''}`;
 
     let badge = '';
-    if (!p.connected) badge = `<span class="badge warn">${t('badge.off')}</span>`;
+    if (p.out && ph !== 'lobby' && ph !== 'gameover') badge = `<span class="badge warn">${t('badge.out')}</span>`;
+    else if (!p.connected) badge = `<span class="badge warn">${t('badge.off')}</span>`;
     else if (ph === 'lobby' || ph === 'gameover') badge = p.ready ? `<span class="badge ok">${t('badge.ready')}</span>` : `<span class="badge">${t('badge.wait')}</span>`;
     else if (ph === 'memorize') badge = p.memorized ? `<span class="badge ok">${t('badge.memorized')}</span>` : `<span class="badge">${t('badge.memorizing')}</span>`;
     else if (ph === 'pick') badge = p.locked ? `<span class="badge ok">${t('badge.locked')}</span>` : `<span class="badge">${t('badge.picking', { n: p.pickCount })}</span>`;
-    else if (hand) badge = `<span class="badge hand">${esc(I18N.hand(hand.score))}</span>`;
+    else if (hand) {
+      badge = `<span class="badge hand">${esc(I18N.hand(hand.score))}</span>`;
+      if (S.game === 'nut') {
+        const secs = hand.lockedAt == null ? '—' : t('secs', { n: (hand.lockedAt / 1000).toFixed(1) });
+        const nutsTag = S.result.hitters?.includes(p.id) ? ' <b class="nuts-tag">NUTS</b>' : '';
+        badge += `<span class="badge time">⏱ ${secs}${nutsTag}</span>`;
+      }
+    }
+    const botTag = p.bot ? `<span class="bot-tag">BOT·${t(`lvl.${p.bot}`)}</span>` : '';
+    const removeBtn = p.bot && ph === 'lobby' ? `<button class="seat-x" data-act="removeBot" data-id="${p.id}" aria-label="${t('bot.remove')}" title="${t('bot.remove')}">×</button>` : '';
 
     let delta = '';
     if (ph === 'showdown' && S.result) {
@@ -332,16 +375,17 @@
     }
 
     setHTML(el, `
-      <div class="avatar${p.connected ? '' : ' off'}" style="background:${colorFor(p.id)}">${esc(p.name[0] || '?')}</div>
+      ${removeBtn}
+      <div class="avatar${p.connected ? '' : ' off'}${p.bot ? ' bot' : ''}" style="background:${colorFor(p.id)}">${p.bot ? botFace() : esc(p.name[0] || '?')}</div>
       <div class="who">
-        <div class="name">${esc(p.name)}${isMe ? `<em>${t('me')}</em>` : ''}</div>
+        <div class="name">${esc(p.name)}${isMe ? `<em>${t('me')}</em>` : ''}${botTag}</div>
         <div class="chips"><span class="chip-icon"></span>${fmt(p.chips)} ${delta}</div>
         ${badge}
       </div>
       <div class="hole">${hole}</div>`);
   }
 
-  function renderGrid({ me, opp, inResult, hlCards }) {
+  function renderGrid({ me, opps, inResult, hlCards }) {
     const g = $('#grid');
     const fresh = S.dealId !== dealKey;
     if (fresh) {
@@ -360,8 +404,11 @@
 
     const ph = S.phase;
     const myPicks = me?.picks || [];
-    const oppPicks = inResult ? opp?.picks || [] : [];
-    const picked = new Set([...myPicks, ...oppPicks]);
+    // Who picked each position (only revealed at showdown).
+    const pickers = new Map();
+    if (inResult) for (const o of opps) for (const i of o.picks || []) pickers.set(i, [...(pickers.get(i) || []), o]);
+    const picked = new Set([...myPicks, ...pickers.keys()]);
+    const nuts = inResult && S.result?.nuts ? S.result.nuts.picks : [];
 
     [...g.children].forEach((el, i) => {
       const info = S.grid[i];
@@ -376,14 +423,18 @@
         el.classList.toggle('down', wantDown);
       }
       const mine = myPicks.includes(i);
-      const theirs = oppPicks.includes(i);
+      const theirs = pickers.get(i) || [];
+      const isNuts = nuts.includes(i);
       el.classList.toggle('mine', mine);
-      el.classList.toggle('opp', theirs);
-      el.classList.toggle('pickable', ph === 'pick' && !me?.locked);
-      el.classList.toggle('dim', inResult && !picked.has(i));
+      el.classList.toggle('opp', theirs.length > 0);
+      el.classList.toggle('nuts', isNuts);
+      el.classList.toggle('pickable', ph === 'pick' && !me?.locked && !me?.out);
+      el.classList.toggle('dim', inResult && !picked.has(i) && !isNuts);
       el.classList.toggle('hl', inResult && picked.has(i) && hlCards.has(info?.card));
+      const shown = theirs.slice(0, 2).map((o) => `<span class="t-opp">${esc(o.name.slice(0, 4))}</span>`).join('');
+      const more = theirs.length > 2 ? `<span class="t-opp">+${theirs.length - 2}</span>` : '';
       setHTML(el.querySelector('.tag'),
-        (mine ? `<span class="t-me">${t('me')}</span>` : '') + (theirs ? `<span class="t-opp">${esc(opp.name.slice(0, 4))}</span>` : ''));
+        (isNuts ? '<span class="t-nuts">NUTS</span>' : '') + (mine ? `<span class="t-me">${t('me')}</span>` : '') + shown + more);
     });
   }
 
@@ -459,7 +510,8 @@
       boardKey = key;
       b.innerHTML = '';
       if (S.board.length) {
-        const animate = S.phase === 'reveal' || ['reveal', 'memorize', 'shuffle'].includes(P?.phase);
+        // Deal animation for a fresh board, but not when (re)joining straight into results.
+        const animate = !['showdown', 'gameover'].includes(S.phase);
         S.board.forEach((code, i) => {
           const c = makeCard('');
           setFace(c, code);
@@ -486,23 +538,31 @@
 
   function renderStatus({ me, opp }) {
     const ph = S.phase;
+    const nut = S.game === 'nut';
     const labels = {
       lobby: opp ? t('ph.lobbyReady') : t('ph.lobbyWait'),
       memorize: t('ph.memorize'),
       reveal: t('ph.reveal'),
       shuffle: t('ph.shuffle'),
-      pick: t('ph.pick'),
+      pick: nut ? t('ph.nutPick') : t('ph.pick'),
       showdown: t('ph.showdown'),
       gameover: t('ph.gameover'),
     };
     const memSec = Math.round(S.durations.memorize / 1000);
     const pickSec = Math.round(S.durations.pick / 1000);
+    const times = nut ? t('sub.nutTime', { p: pickSec }) : t('sub.times', { m: memSec, p: pickSec });
     const subs = {
-      lobby: [t(`game.${S.game}`), opp ? t('sub.lobbyOpp') : t('sub.lobbyCode', { code: S.code }), t('sub.times', { m: memSec, p: pickSec }), S.settings?.swaps ? t('sub.swaps', { n: S.settings.swaps }) : ''].filter(Boolean).join(' · '),
+      lobby: [
+        t(`game.${S.game}`),
+        t('sub.count', { n: S.players.length, max: S.maxPlayers }),
+        opp ? t('sub.lobbyOpp') : t('sub.lobbyCode', { code: S.code }),
+        times,
+        S.settings?.swaps ? t('sub.swaps', { n: S.settings.swaps }) : '',
+      ].filter(Boolean).join(' · '),
       memorize: t('sub.memorize', { m: memSec }),
       reveal: S.game === 'shuffle' ? t('sub.revealShuffle') : t('sub.reveal'),
       shuffle: t('sub.shuffle'),
-      pick: t('sub.pick'),
+      pick: nut ? t('sub.nutPick') : t('sub.pick'),
       showdown: S.result ? t('sub.pot', { n: fmt(S.result.pot) }) : '',
       gameover: '',
     };
@@ -536,10 +596,17 @@
     if (!me) return setHTML(bar, '');
     const ph = S.phase;
     let html = '';
-    if (ph === 'lobby') {
-      html = `<button class="btn ghost" data-tutorial>${t('howto')}</button>
-        ${!opp ? `<button class="btn ghost" data-act="invite">${t('invite.copy')}</button>` : ''}
-        <button class="btn ${me.ready ? 'ghost' : 'gold'} big" data-act="ready">${me.ready ? t('act.unready') : t('act.ready')}</button>`;
+    if (me.out && ph !== 'lobby' && ph !== 'gameover') {
+      html = `<span class="hint">${t('hint.out')}</span>`;
+    } else if (ph === 'lobby') {
+      const full = S.players.length >= S.maxPlayers;
+      const bots = full ? '' : `<div class="bot-add"><span>${t('bot.add')}</span>${['easy', 'normal', 'hard']
+        .map((l) => `<button data-act="addBot" data-level="${l}" class="lvl-${l}">${t(`lvl.${l}`)}</button>`).join('')}</div>`;
+      html = `<div class="action-row">
+          <button class="btn ghost" data-tutorial>${t('howto')}</button>
+          ${full ? '' : `<button class="btn ghost" data-act="invite">${t('invite.copy')}</button>`}
+          <button class="btn ${me.ready ? 'ghost' : 'gold'} big" data-act="ready" ${opp ? '' : 'disabled'}>${me.ready ? t('act.unready') : t('act.ready')}</button>
+        </div>${bots}`;
     } else if (ph === 'memorize') {
       html = me.memorized
         ? `<span class="hint dots">${t('hint.oppMemorizing')}</span>`
@@ -575,8 +642,12 @@
     const title = draw ? t('go.draw') : won ? t('go.win') : t('go.lose');
     const reasonText = reason === 'bust' ? t('go.bust') : t('go.rounds', { n: S.maxRounds });
     const rows = standings.map((s, i) =>
-      `<div class="${i === 0 && !draw ? 'top' : ''}"><span class="rk">${i + 1}</span><span class="nm">${esc(s.name)}${s.id === S.me ? t('meSuffix') : ''}</span><span class="ch">${fmt(s.chips)}</span></div>`).join('');
-    const waiting = me?.ready ? (opp ? (opp.ready ? '' : t('go.waitOpp')) : t('go.oppGone')) : (opp?.ready ? t('go.oppWants') : '');
+      `<div class="${i === 0 && !draw ? 'top' : ''}"><span class="rk">${i + 1}</span><span class="nm">${esc(s.name)}${s.id === S.me ? t('meSuffix') : ''}${s.bot ? ` <small class="bot-tag">BOT·${t(`lvl.${s.bot}`)}</small>` : ''}</span><span class="ch">${fmt(s.chips)}</span></div>`).join('');
+    const others = S.players.filter((p) => p.id !== S.me);
+    const readyCount = S.players.filter((p) => p.ready).length;
+    const waiting = !others.length ? t('go.oppGone')
+      : me?.ready ? t('go.readyCount', { n: readyCount, max: S.players.length })
+      : others.some((p) => p.ready && !p.bot) ? t('go.oppWants') : '';
     setHTML(ov, `
       <div class="result-card">
         <div class="trophy">${draw ? '🤝' : won ? '🏆' : '🃏'}</div>
@@ -602,9 +673,12 @@
       case 'reveal':
         SFX.flipWave(16, 0.04);
         break;
+      case 'pick':
+        if (S.game === 'nut') { SFX.shuffle(); SFX.flipWave(16, 0.04, 0.5); }
+        break;
       case 'showdown':
         SFX.flip(0.15); SFX.flip(0.25);
-        SFX.flipWave(16, 0.035, 0.9);
+        if (S.game !== 'nut') SFX.flipWave(16, 0.035, 0.9);
         break;
       case 'gameover':
         if (S.final?.championId === S.me) SFX.fanfare();

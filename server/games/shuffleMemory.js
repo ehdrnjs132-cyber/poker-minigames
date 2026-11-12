@@ -13,7 +13,7 @@ const SWAP_COUNTS = [3, 5, 8, 12, 16];
  * anyway, so sending it to clients leaks nothing about card identities.
  */
 class ShuffleMemory extends MemoryPoker {
-  static meta = { id: 'shuffle', name: '셔플 메모리', minPlayers: 2, maxPlayers: 2 };
+  static meta = { ...MemoryPoker.meta, id: 'shuffle', name: '셔플 메모리' };
 
   static normalizeSettings(raw = {}) {
     const base = MemoryPoker.normalizeSettings(raw);
@@ -28,6 +28,7 @@ class ShuffleMemory extends MemoryPoker {
   constructor(room, settings) {
     super(room, settings);
     this.stepMs = SPEEDS[this.settings.speed];
+    this.swapCount = this.settings.swaps; // bots lose track as swaps pile up
     // A little lead-in so clients can settle after the flip, plus a tail.
     this.shuffleMs = 600 + this.settings.swaps * this.stepMs + 500;
     this.swaps = [];

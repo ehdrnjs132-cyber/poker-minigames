@@ -1,6 +1,7 @@
 ﻿const crypto = require('crypto');
 const { makeDeck, shuffle } = require('../cards');
 const { bestHand, compareScores } = require('../handEval');
+const Bots = require('../bots');
 
 const CFG = {
   gridSize: 16,
@@ -12,41 +13,50 @@ const CFG = {
   startChips: 1000,
   maxRounds: 10,
   antes: [50, 50, 100, 100, 150, 150, 200, 200, 300, 300],
+  minPlayers: 2,
+  maxPlayers: 6,
+  defaultPlayers: 4,
 };
 const ACTIVE_PHASES = ['memorize', 'reveal', 'shuffle', 'pick', 'showdown'];
+
+const clampInt = (v, def, min, max) => {
+  const n = Math.round(Number(v));
+  return Number.isFinite(n) ? Math.min(max, Math.max(min, n)) : def;
+};
 
 /**
  * 기억 포커 (Memory Poker)
  * 16 cards are shown face up, then flipped face down (players remember
  * positions only). 5 community cards are dealt; each player secretly picks
- * 2 positions (both may pick the same card). Best 5 of 7 wins the pot.
- * Variants (see shuffleMemory.js) extend this class and override the hooks.
+ * 2 positions (several players may pick the same card). Best 5 of 7 wins.
+ * 2–6 players; anyone who runs out of chips is out for the rest of the game.
  *
- * The server is authoritative: card identities in the grid are only sent
- * to clients during memorize / showdown / gameover.
+ * This is also the base class for the other card-grid games
+ * (shuffleMemory.js, nutRace.js), which override the hooks below.
+ * The server is authoritative: grid cards are only sent to clients in the
+ * phases listed by gridPhases().
  */
 class MemoryPoker {
-  static meta = { id: 'memory', name: '기억 포커', minPlayers: 2, maxPlayers: 2 };
+  static meta = { id: 'memory', name: '기억 포커', minPlayers: CFG.minPlayers, maxPlayers: CFG.maxPlayers };
 
   // Room-creator options; anything invalid falls back to the defaults.
   static normalizeSettings(raw = {}) {
-    const sec = (v, def, min, max) => {
-      const n = Math.round(Number(v));
-      return Number.isFinite(n) ? Math.min(max, Math.max(min, n)) : def;
-    };
     return {
-      memorizeSec: sec(raw.memorizeSec, CFG.memorizeMs / 1000, 5, 90),
-      pickSec: sec(raw.pickSec, CFG.pickMs / 1000, 5, 60),
+      players: clampInt(raw.players, CFG.defaultPlayers, CFG.minPlayers, CFG.maxPlayers),
+      memorizeSec: clampInt(raw.memorizeSec, CFG.memorizeMs / 1000, 5, 90),
+      pickSec: clampInt(raw.pickSec, CFG.pickMs / 1000, 5, 60),
     };
   }
 
   constructor(room, settings) {
     this.room = room;
     this.settings = this.constructor.normalizeSettings(settings);
+    this.maxPlayers = this.settings.players;
     this.memorizeMs = this.settings.memorizeSec * 1000;
     this.pickMs = this.settings.pickSec * 1000;
     this.ps = new Map();
     this.timer = null;
+    this.botTimers = [];
     this.dealId = 0;
     this.toLobby();
   }
@@ -60,7 +70,48 @@ class MemoryPoker {
   }
 
   canJoin() {
-    return this.phase === 'lobby' && this.players.length < this.constructor.meta.maxPlayers;
+    return this.phase === 'lobby' && this.players.length < this.maxPlayers;
+  }
+
+  activePlayers() {
+    return this.players.filter((p) => this.ps.get(p.id) && !this.ps.get(p.id).out);
+  }
+
+  // ---- hooks for variants ----------------------------------------------
+
+  startRound() {
+    this.setPhase('memorize', this.memorizeMs, () => this.startReveal());
+  }
+
+  afterReveal() {
+    this.startPick();
+  }
+
+  gridPhases() {
+    return ['memorize', 'showdown', 'gameover'];
+  }
+
+  boardPhases() {
+    return ['reveal', 'pick', 'showdown', 'gameover'];
+  }
+
+  // Default: best hand wins, equal hands split.
+  pickWinners(hands) {
+    let top = null;
+    for (const h of hands) if (!top || compareScores(h.score, top) > 0) top = h.score;
+    return hands.filter((h) => compareScores(h.score, top) === 0).map((h) => h.id);
+  }
+
+  extraResult(/* hands */) {
+    return {};
+  }
+
+  extraView() {
+    return {};
+  }
+
+  botPlan(player) {
+    return Bots.memoryPlan(this.grid, this.board, player.bot, { swaps: this.swapCount || 0, maxDelay: this.pickMs - 1200 });
   }
 
   // ---- lifecycle -------------------------------------------------------
@@ -78,22 +129,27 @@ class MemoryPoker {
     this.deadline = null;
     this.notice = notice;
     this.dealId++;
-    for (const s of this.ps.values()) {
+    for (const p of this.players) {
+      const s = this.ps.get(p.id);
+      if (!s) continue;
       s.chips = CFG.startChips;
-      s.ready = false;
+      s.ready = !!p.bot;
+      s.out = false;
       this.resetHand(s);
     }
+    this.runBots();
   }
 
   resetHand(s) {
     s.picks = [];
     s.locked = false;
+    s.lockedAt = null;
     s.memorized = false;
     s.next = false;
   }
 
   onJoin(player) {
-    const s = { chips: CFG.startChips, ready: false };
+    const s = { chips: CFG.startChips, ready: !!player.bot, out: false };
     this.resetHand(s);
     this.ps.set(player.id, s);
     this.notice = null;
@@ -102,10 +158,16 @@ class MemoryPoker {
   // Called after the player has been removed from room.players.
   onLeave(playerId, name) {
     this.ps.delete(playerId);
-    if (ACTIVE_PHASES.includes(this.phase) || this.phase === 'gameover') {
-      this.toLobby({ code: 'srv.oppLeft', name, at: Date.now() });
+    const inGame = ACTIVE_PHASES.includes(this.phase);
+    if (inGame || this.phase === 'gameover') {
+      const humans = this.players.filter((p) => !p.bot).length;
+      if (this.players.length < CFG.minPlayers || humans === 0) return this.toLobby({ code: 'srv.oppLeft', name, at: Date.now() });
+      this.notice = { code: 'sys.left', name, at: Date.now() };
+      if (inGame && this.activePlayers().length < CFG.minPlayers) return this.finish();
+      if (inGame) this.checkProgress();
     } else {
-      for (const s of this.ps.values()) s.ready = false;
+      // Someone left the waiting room: humans re-confirm before a surprise start.
+      for (const p of this.players) if (!p.bot) this.ps.get(p.id).ready = false;
     }
   }
 
@@ -116,19 +178,90 @@ class MemoryPoker {
   clearTimer() {
     if (this.timer) clearTimeout(this.timer);
     this.timer = null;
+    this.botTimers.forEach(clearTimeout);
+    this.botTimers = [];
   }
 
   setPhase(phase, ms, then) {
     this.clearTimer();
     this.phase = phase;
+    this.phaseStartedAt = Date.now();
     this.deadline = ms ? Date.now() + ms : null;
     if (ms) this.timer = setTimeout(then, ms);
     this.changed();
+    this.runBots();
   }
 
-  allConnected(pred) {
-    const live = this.players.filter((p) => p.connected);
+  // Everyone still playing (connected, not eliminated) satisfies pred.
+  allActive(pred) {
+    const live = this.activePlayers().filter((p) => p.connected);
     return live.length > 0 && live.every((p) => pred(this.ps.get(p.id)));
+  }
+
+  // Advance early when nobody is left to wait for. Returns true if advanced.
+  checkProgress() {
+    if (this.phase === 'memorize' && this.allActive((s) => s.memorized)) return this.startReveal(), true;
+    if (this.phase === 'pick' && this.allActive((s) => s.locked)) return this.showdown(), true;
+    if (this.phase === 'showdown' && this.allActive((s) => s.next)) return this.afterShowdown(), true;
+    return false;
+  }
+
+  tryStart() {
+    const ready = this.players.length >= CFG.minPlayers && this.players.every((p) => this.ps.get(p.id).ready);
+    if ((this.phase === 'lobby' || this.phase === 'gameover') && ready) return this.startGame(), true;
+    return false;
+  }
+
+  // ---- bots ------------------------------------------------------------
+
+  botLater(ms, fn) {
+    const key = `${this.phase}:${this.dealId}`;
+    this.botTimers.push(setTimeout(() => {
+      if (`${this.phase}:${this.dealId}` !== key) return;
+      fn();
+    }, ms));
+  }
+
+  runBots() {
+    for (const p of this.players) {
+      if (!p.bot) continue;
+      const s = this.ps.get(p.id);
+      if (!s || s.out) continue;
+      switch (this.phase) {
+        case 'memorize':
+          this.botLater(Bots.rand([700, 1600]), () => {
+            s.memorized = true;
+            if (!this.checkProgress()) this.changed();
+          });
+          break;
+        case 'pick': {
+          const plan = this.botPlan(p);
+          this.botLater(Math.max(800, plan.delay), () => {
+            s.picks = plan.picks;
+            s.locked = true;
+            s.lockedAt = Date.now() - this.phaseStartedAt;
+            if (!this.checkProgress()) this.changed();
+          });
+          break;
+        }
+        case 'showdown': {
+          const won = this.result?.winners.includes(p.id);
+          if (crypto.randomInt(100) < 35) {
+            this.botLater(Bots.rand([1800, 3200]), () => this.room.postChat({
+              kind: 'sticker', playerId: p.id, name: p.name,
+              sticker: Bots.pickOne(won ? Bots.WIN_STICKERS : Bots.LOSE_STICKERS),
+            }));
+          }
+          this.botLater(Bots.rand([2500, 4000]), () => {
+            s.next = true;
+            if (!this.checkProgress()) this.changed();
+          });
+          break;
+        }
+        default:
+          break;
+      }
+    }
   }
 
   // ---- actions ---------------------------------------------------------
@@ -141,18 +274,17 @@ class MemoryPoker {
       case 'ready': {
         if (this.phase !== 'lobby' && this.phase !== 'gameover') return;
         s.ready = !s.ready;
-        const full = this.players.length === this.constructor.meta.maxPlayers;
-        if (full && this.players.every((p) => this.ps.get(p.id).ready)) return this.startGame();
+        if (this.tryStart()) return;
         break;
       }
       case 'memorized': {
-        if (this.phase !== 'memorize') return;
+        if (this.phase !== 'memorize' || s.out) return;
         s.memorized = true;
-        if (this.allConnected((x) => x.memorized)) return this.startReveal();
+        if (this.checkProgress()) return;
         break;
       }
       case 'pick': {
-        if (this.phase !== 'pick' || s.locked) return;
+        if (this.phase !== 'pick' || s.locked || s.out) return;
         const i = Number(action.index);
         if (!Number.isInteger(i) || i < 0 || i >= CFG.gridSize) return;
         const at = s.picks.indexOf(i);
@@ -162,15 +294,16 @@ class MemoryPoker {
         break;
       }
       case 'lock': {
-        if (this.phase !== 'pick' || s.picks.length !== CFG.picks) return;
+        if (this.phase !== 'pick' || s.out || s.picks.length !== CFG.picks) return;
         s.locked = true;
-        if (this.allConnected((x) => x.locked)) return this.showdown();
+        s.lockedAt = Date.now() - this.phaseStartedAt;
+        if (this.checkProgress()) return;
         break;
       }
       case 'next': {
         if (this.phase !== 'showdown') return;
         s.next = true;
-        if (this.allConnected((x) => x.next)) return this.afterShowdown();
+        if (this.checkProgress()) return;
         break;
       }
       default:
@@ -185,6 +318,7 @@ class MemoryPoker {
     for (const s of this.ps.values()) {
       s.chips = CFG.startChips;
       s.ready = false;
+      s.out = false;
     }
     this.round = 0;
     this.final = null;
@@ -194,15 +328,16 @@ class MemoryPoker {
 
   nextRound() {
     this.round++;
+    for (const s of this.ps.values()) if (s.chips <= 0) s.out = true;
+    const active = this.activePlayers().map((p) => this.ps.get(p.id));
     const scheduled = CFG.antes[Math.min(this.round - 1, CFG.antes.length - 1)];
-    const states = this.players.map((p) => this.ps.get(p.id));
     // Cap the ante at the shortest stack so nobody needs a side pot.
-    this.ante = Math.min(scheduled, ...states.map((s) => s.chips));
+    this.ante = Math.min(scheduled, ...active.map((s) => s.chips));
     this.pot = 0;
-    for (const s of states) {
+    for (const s of this.ps.values()) this.resetHand(s);
+    for (const s of active) {
       s.chips -= this.ante;
       this.pot += this.ante;
-      this.resetHand(s);
     }
 
     const deck = shuffle(makeDeck());
@@ -210,26 +345,11 @@ class MemoryPoker {
     this.board = deck.slice(CFG.gridSize, CFG.gridSize + 5);
     this.result = null;
     this.dealId++;
-    this.setPhase('memorize', this.memorizeMs, () => this.startReveal());
+    this.startRound();
   }
 
   startReveal() {
     this.setPhase('reveal', CFG.revealMs, () => this.afterReveal());
-  }
-
-  // Hook: variants insert extra phases between the flip and picking.
-  afterReveal() {
-    this.startPick();
-  }
-
-  // Hook: phases in which the community cards are visible.
-  boardPhases() {
-    return ['reveal', 'pick', 'showdown', 'gameover'];
-  }
-
-  // Hook: extra per-variant view fields.
-  extraView() {
-    return {};
   }
 
   startPick() {
@@ -237,8 +357,9 @@ class MemoryPoker {
   }
 
   showdown() {
-    // Anyone who didn't finish picking gets random cards.
-    for (const p of this.players) {
+    const active = this.activePlayers();
+    // Anyone who didn't finish picking gets random cards (and no lock time).
+    for (const p of active) {
       const s = this.ps.get(p.id);
       while (s.picks.length < CFG.picks) {
         const i = crypto.randomInt(CFG.gridSize);
@@ -247,17 +368,14 @@ class MemoryPoker {
       s.locked = true;
     }
 
-    const hands = this.players.map((p) => {
+    const hands = active.map((p) => {
       const s = this.ps.get(p.id);
       const cards = s.picks.map((i) => this.grid[i]);
       const bh = bestHand([...cards, ...this.board]);
-      return { id: p.id, picks: s.picks.slice(), cards, name: bh.name, desc: bh.desc, score: bh.score, best: bh.cards };
+      return { id: p.id, picks: s.picks.slice(), cards, score: bh.score, best: bh.cards, lockedAt: s.lockedAt };
     });
 
-    let top = null;
-    for (const h of hands) if (!top || compareScores(h.score, top) > 0) top = h.score;
-    const winners = hands.filter((h) => compareScores(h.score, top) === 0).map((h) => h.id);
-
+    const winners = this.pickWinners(hands);
     const share = Math.floor(this.pot / winners.length);
     let remainder = this.pot - share * winners.length;
     for (const id of winners) {
@@ -267,13 +385,14 @@ class MemoryPoker {
     }
 
     const willEnd = this.isGameOver();
-    this.result = { hands, winners, pot: this.pot, share, ante: this.ante, final: willEnd };
+    this.result = { hands, winners, pot: this.pot, share, ante: this.ante, final: willEnd, ...this.extraResult(hands) };
     this.pot = 0;
     this.setPhase('showdown', CFG.showdownMs, () => this.afterShowdown());
   }
 
   isGameOver() {
-    return this.round >= CFG.maxRounds || this.players.some((p) => this.ps.get(p.id).chips <= 0);
+    const alive = this.activePlayers().filter((p) => this.ps.get(p.id).chips > 0);
+    return this.round >= CFG.maxRounds || alive.length < CFG.minPlayers;
   }
 
   afterShowdown() {
@@ -283,29 +402,30 @@ class MemoryPoker {
 
   finish() {
     const standings = this.players
-      .map((p) => ({ id: p.id, name: p.name, chips: this.ps.get(p.id).chips }))
+      .map((p) => ({ id: p.id, name: p.name, bot: p.bot || null, chips: this.ps.get(p.id).chips }))
       .sort((a, b) => b.chips - a.chips);
     const championId = standings.length > 1 && standings[0].chips === standings[1].chips ? null : standings[0].id;
     const bust = standings.some((s) => s.chips <= 0);
     this.final = { standings, championId, reason: bust ? 'bust' : 'rounds' };
-    for (const s of this.ps.values()) s.ready = false;
+    for (const p of this.players) this.ps.get(p.id).ready = !!p.bot;
     this.setPhase('gameover', 0);
   }
 
   // ---- view ------------------------------------------------------------
 
   viewFor(viewerId) {
-    const showGrid = ['memorize', 'showdown', 'gameover'].includes(this.phase);
+    const showGrid = this.gridPhases().includes(this.phase);
     const showBoard = this.boardPhases().includes(this.phase);
     const showAllPicks = this.phase === 'showdown' || this.phase === 'gameover';
 
     return {
       game: this.constructor.meta.id,
-      gameName: this.constructor.meta.name,
       phase: this.phase,
       dealId: this.dealId,
       round: this.round,
       maxRounds: CFG.maxRounds,
+      maxPlayers: this.maxPlayers,
+      minPlayers: CFG.minPlayers,
       ante: this.ante,
       pot: this.pot,
       deadline: this.deadline,
@@ -319,8 +439,10 @@ class MemoryPoker {
         return {
           id: p.id,
           name: p.name,
+          bot: p.bot || null,
           connected: p.connected,
           chips: s.chips,
+          out: s.out,
           ready: s.ready,
           memorized: s.memorized,
           locked: s.locked,
@@ -337,4 +459,5 @@ class MemoryPoker {
 }
 
 MemoryPoker.CFG = CFG;
+MemoryPoker.clampInt = clampInt;
 module.exports = MemoryPoker;

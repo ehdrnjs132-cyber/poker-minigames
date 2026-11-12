@@ -70,9 +70,17 @@
           </div>
           <span class="gc-cta" data-i18n="cta.create">방 만들기</span>
         </button>
-        <button class="game-card locked" data-game="soon1" aria-disabled="true">
-          <div class="gc-art dim"><span class="mini-card back">?</span><span class="mini-card back">?</span></div>
-          <div class="gc-body"><b data-i18n="game.nut">너트 레이스</b><p data-i18n="game.soon"></p><span class="gc-meta">COMING SOON</span></div>
+        <button class="game-card" data-game="nut">
+          <div class="gc-art nut-art">
+            <span class="mini-card mface">K<i>♠</i></span><span class="mini-card mface red">K<i>♥</i></span><span class="mini-card mface">9<i>♣</i></span>
+            <span class="nut-bolt" aria-hidden="true">⚡</span>
+          </div>
+          <div class="gc-body">
+            <b><span data-i18n="game.nut">너트 레이스</span> <span class="gc-new">NEW</span></b>
+            <p data-i18n="game.nut.desc"></p>
+            <span class="gc-meta" data-i18n="game.nut.meta"></span>
+          </div>
+          <span class="gc-cta" data-i18n="cta.create">방 만들기</span>
         </button>
         <button class="game-card locked" data-game="soon2" aria-disabled="true">
           <div class="gc-art dim"><span class="mini-card back">?</span><span class="mini-card back">?</span></div>
@@ -110,7 +118,7 @@
     </div>
 
     <div class="stage">
-      <div id="seatOpp" class="seat opp"></div>
+      <div id="opps" class="opps"></div>
 
       <div class="table">
         <div class="rail"></div>
@@ -166,8 +174,14 @@
   <div id="setup" class="overlay" role="dialog" aria-modal="true" aria-labelledby="setupTitle">
     <div class="result-card setup-card">
       <h2 id="setupTitle" data-i18n="setup.title">방 설정</h2>
-      <p class="reason"><span id="setupGameName">기억 포커</span> · <span data-i18n="players2">2인</span> · <button class="tut-inline" id="setupTutorial" data-tutorial="memory" data-i18n="howto">게임 방법</button></p>
+      <p class="reason"><span id="setupGameName">기억 포커</span> · <button class="tut-inline" id="setupTutorial" data-tutorial="memory" data-i18n="howto">게임 방법</button></p>
       <div class="setting">
+        <div class="setting-head"><b data-i18n="setup.players">인원</b></div>
+        <div class="seg seg-5" data-key="players">
+          <button data-v="2">2</button><button data-v="3">3</button><button data-v="4">4</button><button data-v="5">5</button><button data-v="6">6</button>
+        </div>
+      </div>
+      <div class="setting" data-only="memory shuffle">
         <div class="setting-head"><b data-i18n="setup.memorize">기억 시간</b><span><em id="memVal">30</em><span data-i18n="sec">초</span></span></div>
         <div class="seg" data-key="memorizeSec">
           <button data-v="10">10</button><button data-v="15">15</button><button data-v="20">20</button>

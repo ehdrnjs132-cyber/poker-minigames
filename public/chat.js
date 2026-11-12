@@ -88,14 +88,14 @@ const Chat = (() => {
 
   // Speech bubble that pops from the sender's seat.
   function showBubble(m) {
-    const seat = m.playerId === window.HA.me() ? $('#seatMe') : $('#seatOpp');
+    const seat = document.querySelector(`.seat[data-id="${m.playerId}"]`);
     if (!seat || !document.getElementById('room').classList.contains('active')) return;
     const r = seat.getBoundingClientRect();
     const b = document.createElement('div');
-    const top = seat.id === 'seatOpp';
+    const top = seat.id !== 'seatMe';
     // One bubble per seat: a new message replaces the previous one.
-    document.querySelectorAll(`.seat-bubble[data-seat="${seat.id}"]`).forEach((old) => old.remove());
-    b.dataset.seat = seat.id;
+    document.querySelectorAll(`.seat-bubble[data-seat="${m.playerId}"]`).forEach((old) => old.remove());
+    b.dataset.seat = m.playerId;
     b.className = `seat-bubble ${top ? 'below' : 'above'}${m.kind === 'sticker' ? ' is-sticker' : ''}`;
     b.innerHTML = m.kind === 'sticker' ? Stickers.svg(m.sticker, 88) : esc(m.text);
     b.style.left = `${Math.max(12, r.left + 70)}px`;

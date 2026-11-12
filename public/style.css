@@ -479,6 +479,71 @@ input { font: inherit; }
 .tut-dots button { width: 8px; height: 8px; padding: 0; border: 0; border-radius: 999px; background: rgba(255, 255, 255, .25); transition: width .25s, background .25s; }
 .tut-dots button.on { width: 22px; background: var(--gold); }
 
+/* ---------- multi-player seats ---------- */
+.opps { width: min(560px, 100%); display: flex; flex-wrap: wrap; justify-content: center; gap: 10px; }
+.opps > .seat { width: 100%; }
+.opps.multi { width: min(1060px, 100%); }
+.opps.multi > .seat { width: auto; flex: 1 1 300px; max-width: 420px; }
+.opps.many > .seat { flex-basis: 230px; max-width: 330px; min-height: 66px; padding: 8px 10px; gap: 8px; }
+.opps.many .avatar { width: 40px; height: 40px; font-size: 1.1rem; }
+.opps.many .hole { --hw: 34px; }
+.seat { position: relative; }
+.seat.out { opacity: .5; filter: grayscale(.7); }
+.avatar.bot { box-shadow: 0 0 0 3px var(--navy-900), 0 0 0 5px #9aa7c7; }
+.bot-tag {
+  font-family: var(--num); font-size: .62rem; letter-spacing: .06em; font-weight: 600;
+  padding: 2px 6px; border-radius: 6px; background: rgba(154, 167, 199, .2); color: #c8d2ee; white-space: nowrap;
+}
+.seat-x {
+  position: absolute; top: -8px; right: -8px; width: 26px; height: 26px; border-radius: 50%; border: 0; z-index: 2;
+  background: var(--red); color: #fff; font-size: 1.1rem; line-height: 1; box-shadow: 0 2px 8px rgba(0, 0, 0, .5);
+}
+.seat-x:hover { filter: brightness(1.15); }
+.badge.time { background: rgba(127, 176, 255, .16); color: #cfe0ff; font-family: var(--num); letter-spacing: .02em; }
+.nuts-tag { color: var(--gold); margin-left: 4px; }
+.who .badge + .badge { margin-top: 3px; }
+
+.action-bar > .action-row { flex-basis: 100%; }
+.action-row { display: flex; align-items: center; justify-content: center; gap: 12px; flex-wrap: wrap; }
+.bot-add {
+  display: flex; align-items: center; gap: 6px; padding: 5px 6px 5px 14px; border-radius: 999px;
+  background: rgba(8, 18, 48, .7); border: 1px solid rgba(127, 176, 255, .2); font-size: .82rem; color: var(--muted); font-weight: 700;
+}
+.bot-add button {
+  border: 0; border-radius: 999px; padding: 6px 14px; font-weight: 900; font-size: .8rem; color: #fff; transition: transform .15s, filter .15s;
+}
+.bot-add button:hover { transform: translateY(-1px); filter: brightness(1.12); }
+.bot-add .lvl-easy { background: #2f9e6b; }
+.bot-add .lvl-normal { background: #d9881f; }
+.bot-add .lvl-hard { background: #c9283a; }
+
+/* nut race */
+.nut-art { position: relative; background: radial-gradient(ellipse at 50% 120%, #e0a21b, #9b5a06 45%, #3b1d02); }
+.nut-art .mini-card:nth-child(2) { transform: translateY(-6px) scale(1.08); }
+.nut-bolt { position: absolute; top: 8px; right: 14px; font-size: 1.4rem; filter: drop-shadow(0 0 8px rgba(255, 220, 80, .9)); animation: pulse 1.2s infinite; }
+.card.nuts::after { opacity: 1; box-shadow: 0 0 0 3px var(--gold), 0 0 22px var(--gold); }
+.card.nuts.mine::after { box-shadow: 0 0 0 3px var(--me), 0 0 0 6px var(--gold), 0 0 22px var(--gold); }
+.card .tag .t-nuts { background: linear-gradient(180deg, var(--gold-hi), var(--gold)); color: #3a2300; }
+.setup-card { max-height: calc(100dvh - 32px); overflow-y: auto; }
+
+/* Phones: several opponents become compact two-column chips.
+   Their picked cards still show on the grid via name tags at showdown. */
+@media (max-width: 760px) {
+  .opps.multi { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+  .opps.multi > .seat { max-width: none; min-height: 52px; padding: 6px 8px; gap: 7px; border-radius: 14px; }
+  .opps.multi .avatar { width: 30px; height: 30px; font-size: .85rem; box-shadow: 0 0 0 2px var(--navy-900), 0 0 0 3px var(--ring, var(--opp)); }
+  .opps.multi .hole { display: none; }
+  .opps.multi .who { gap: 1px; }
+  .opps.multi .who .name { font-size: .82rem; }
+  .opps.multi .who .chips { font-size: .9rem; }
+  .opps.multi .chips .chip-icon { width: 14px; height: 14px; }
+  .opps.multi .badge { font-size: .64rem; padding: 2px 6px; }
+  .opps.multi .bot-tag { font-size: .56rem; padding: 1px 4px; }
+  .opps.multi .delta { font-size: .72rem; }
+  .bot-add { padding-left: 10px; }
+  .bot-add button { padding: 6px 11px; }
+}
+
 /* ---------- language toggle ---------- */
 .lang-toggle {
   border: 1px solid rgba(245, 196, 81, .5); border-radius: 999px; background: rgba(8, 18, 48, .8);

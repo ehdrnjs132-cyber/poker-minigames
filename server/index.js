@@ -7,7 +7,9 @@ const { Server } = require('socket.io');
 const GAMES = {
   memory: require('./games/memoryPoker'),
   shuffle: require('./games/shuffleMemory'),
+  nut: require('./games/nutRace'),
 };
+const Bots = require('./bots');
 
 const PORT = process.env.PORT || 3000;
 const ROOM_IDLE_MS = 3 * 60 * 1000;
@@ -44,6 +46,7 @@ function createRoom(gameId, settings) {
   if (!Game) return null;
   const room = { code: genCode(), gameId, players: [], chat: [], chatSeq: 0, cleanupTimer: null };
   room.broadcast = () => broadcast(room);
+  room.postChat = (msg) => postChat(room, msg);
   room.game = new Game(room, settings && typeof settings === 'object' ? settings : {});
   rooms.set(room.code, room);
   return room;
@@ -72,7 +75,8 @@ function postChat(room, msg) {
 
 function scheduleCleanup(room) {
   clearTimeout(room.cleanupTimer);
-  if (room.players.some((p) => p.connected)) return;
+  // Bots never "disconnect", so only humans keep a room alive.
+  if (room.players.some((p) => p.connected && !p.bot)) return;
   room.cleanupTimer = setTimeout(() => destroyRoom(room), ROOM_IDLE_MS);
 }
 
@@ -80,6 +84,25 @@ function destroyRoom(room) {
   clearTimeout(room.cleanupTimer);
   room.game.dispose();
   rooms.delete(room.code);
+}
+
+function addBot(room, level) {
+  if (!Bots.isLevel(level) || !room.game.canJoin()) return;
+  const name = Bots.makeName(room.players.map((p) => p.name));
+  const bot = { id: crypto.randomUUID(), name, bot: level, connected: true, socketId: null };
+  room.players.push(bot);
+  room.game.onJoin(bot);
+  postChat(room, { kind: 'system', code: 'sys.botJoined', name, level });
+  room.broadcast();
+}
+
+function removeBot(room, id) {
+  const bot = room.players.find((p) => p.id === id && p.bot);
+  if (!bot || room.game.phase !== 'lobby') return;
+  room.players = room.players.filter((p) => p !== bot);
+  room.game.onLeave(bot.id, bot.name);
+  postChat(room, { kind: 'system', code: 'sys.left', name: bot.name });
+  room.broadcast();
 }
 
 io.on('connection', (socket) => {
@@ -106,7 +129,7 @@ io.on('connection', (socket) => {
     ctx = null;
     room.players = room.players.filter((p) => p !== player);
     room.game.onLeave(player.id, player.name);
-    if (room.players.length === 0) return destroyRoom(room);
+    if (!room.players.some((p) => !p.bot)) return destroyRoom(room);
     postChat(room, { kind: 'system', code: 'sys.left', name: player.name });
     room.broadcast();
   }
@@ -150,7 +173,7 @@ io.on('connection', (socket) => {
       return attach(room, existing);
     }
     if (!room.game.canJoin()) {
-      const full = room.players.length >= room.game.constructor.meta.maxPlayers;
+      const full = room.players.length >= room.game.maxPlayers;
       return reply(ack, { ok: false, code: full ? 'srv.full' : 'srv.inProgress' });
     }
     const player = { id: crypto.randomUUID(), name: cleanName(name), connected: true, socketId: null };
@@ -163,7 +186,10 @@ io.on('connection', (socket) => {
 
   socket.on('action', (action) => {
     if (!ctx || !action || typeof action !== 'object') return;
-    ctx.room.game.onAction(ctx.player.id, action);
+    const { room } = ctx;
+    if (action.type === 'addBot') return addBot(room, action.level);
+    if (action.type === 'removeBot') return removeBot(room, action.id);
+    room.game.onAction(ctx.player.id, action);
   });
 
   socket.on('leave', () => detach());

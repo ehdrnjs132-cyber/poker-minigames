@@ -46,6 +46,7 @@ const Tutorial = (() => {
 
   const STEPS = [
     {
+      games: ['memory', 'shuffle'],
       title: { ko: "카드 위치를 외우세요", en: "Memorize the card positions" },
       text: { ko: "테이블에 카드 16장이 앞면으로 공개됩니다. 제한 시간(방 설정, 기본 30초) 동안 <b>어떤 카드가 어느 자리에 있는지</b> 외우세요. 둘 다 \"다 외웠어요\"를 누르면 바로 넘어갑니다.", en: "All 16 cards are dealt face up. During the time limit (set per room, 30s by default), remember <b>which card sits in which spot</b>. If both players press \"I've got it\", the game moves on right away." },
       html: () => `<div class="tut-felt"><span class="tut-timer">30</span>${gridHTML(false)}</div>`,
@@ -57,6 +58,7 @@ const Tutorial = (() => {
       },
     },
     {
+      games: ['memory', 'shuffle'],
       title: { ko: "카드가 뒤집힙니다", en: "The cards flip over" },
       text: { ko: "시간이 끝나면 모든 카드가 <b>뒷면</b>으로 뒤집힙니다. 이제부터는 기억만이 무기예요!", en: "When time runs out, every card flips <b>face down</b>. From here on, memory is your only weapon!" },
       html: () => `<div class="tut-felt">${gridHTML(false)}</div>`,
@@ -69,7 +71,7 @@ const Tutorial = (() => {
       },
     },
     {
-      only: 'shuffle',
+      games: ['shuffle'],
       title: { ko: "카드가 섞여요! (셔플 메모리)", en: "The cards shuffle! (Shuffle Memory)" },
       text: { ko: "뒤집힌 카드들이 <b>두 장씩 자리를 바꾸며</b> 섞입니다. 노란 테두리 카드(K♥)처럼 <b>좋은 카드가 어디로 가는지 눈으로 따라가세요.</b> 섞는 횟수와 속도는 방을 만들 때 정할 수 있어요.", en: "The face-down cards <b>swap places two at a time</b>. Like the card with the yellow border (K♥), <b>keep your eyes on where the good cards go.</b> You choose how many shuffles and how fast when you create the room." },
       html: () => `<div class="tut-felt">${gridHTML(true, (i) => (i === 1 ? 'track' : ''))}</div>`,
@@ -101,6 +103,7 @@ const Tutorial = (() => {
       },
     },
     {
+      games: ['memory', 'shuffle'],
       title: { ko: "공유 카드 5장", en: "5 community cards" },
       text: { ko: "두 사람이 <b>함께 쓰는 공유 카드 5장</b>이 깔립니다. 이 5장과 잘 어울릴 카드가 어디 있었는지 떠올려 보세요.", en: "<b>5 community cards</b> shared by both players are dealt. Think back to where the cards that go well with them were." },
       html: () => `<div class="tut-felt">${boardHTML(() => 'deal-in')}${gridHTML(true)}</div>`,
@@ -110,6 +113,7 @@ const Tutorial = (() => {
       },
     },
     {
+      games: ['memory', 'shuffle'],
       title: { ko: "위치를 보고 2장 선택", en: "Pick 2 cards by position" },
       text: { ko: "뒤집힌 카드 중 <b>2장을 눌러 고르고 \"선택 확정\"</b>을 누르세요. 상대가 뭘 골랐는지는 쇼다운 전까지 보이지 않아요. 상대와 <b>같은 카드를 골라도 괜찮고</b>, 시간 안에 못 고르면 랜덤으로 정해집니다.", en: "Tap <b>2 face-down cards, then press \"Lock in\"</b>. You can't see your opponent's picks until the showdown. <b>Picking the same card as your opponent is fine</b>, and if time runs out your picks are random." },
       html: () => `<div class="tut-felt">${boardHTML()}${gridHTML(true)}<div class="tut-pointer"></div></div>`,
@@ -132,6 +136,7 @@ const Tutorial = (() => {
       },
     },
     {
+      games: ['memory', 'shuffle'],
       title: { ko: "쇼다운!", en: "Showdown!" },
       text: { ko: "고른 카드가 공개됩니다. <b>내 2장 + 공유 5장 = 7장 중 가장 좋은 5장</b>으로 승부해요. 이 예시는 K♥·9♣를 골라 <b>K 풀하우스</b>! 이긴 사람이 팟(앤티 합계)을 가져가고, 족보가 같으면 나눠 가집니다.", en: "The picked cards are revealed. You play the <b>best 5 of 7: your 2 + the 5 community cards</b>. In this example, picking K♥ and 9♣ makes <b>Kings full of 9s</b>! The winner takes the pot (both antes); ties split it." },
       html: () => `<div class="tut-felt">
@@ -150,6 +155,55 @@ const Tutorial = (() => {
           stage.querySelector('.tut-badge').classList.add('show');
           window.SFX && SFX.win();
         });
+      },
+    },
+    {
+      games: ['nut'],
+      title: { ko: '모든 카드가 공개돼요', en: 'Everything is face up' },
+      text: {
+        ko: '너트 레이스에서는 <b>공유 카드 5장과 16장이 처음부터 모두 앞면</b>이에요. 외울 필요는 없고, 공유 카드와 합쳐 <b>가장 강한 족보가 되는 2장</b>을 찾으면 됩니다.',
+        en: 'In Nut Race, <b>the 5 community cards and all 16 cards are face up from the start</b>. No memorizing: just find the <b>2 cards that make the strongest hand</b> with the board.',
+      },
+      html: () => `<div class="tut-felt">${boardHTML(() => 'deal-in')}${gridHTML(false, () => 'deal-in')}</div>`,
+      play() {
+        stageCards('.tut-board .card').forEach((c, i) => c.style.setProperty('--dd', `${i * 110}ms`));
+        stageCards('.tut-grid .card').forEach((c, i) => c.style.setProperty('--dd', `${600 + i * 50}ms`));
+        window.SFX && SFX.deal();
+      },
+    },
+    {
+      games: ['nut'],
+      title: { ko: '빨리 찾아서 확정!', en: 'Find it fast and lock in!' },
+      text: {
+        ko: '2장을 눌러 고르고 <b>"선택 확정"</b>을 누르세요. <b>족보가 같으면 먼저 확정한 사람이 이겨요.</b> 확정 시간은 쇼다운 때 ⏱로 표시됩니다. 서두르다 더 약한 패를 고르지 않게 조심하세요!',
+        en: 'Tap 2 cards and press <b>"Lock in"</b>. <b>With equal hands, whoever locked in first wins.</b> Lock times show with ⏱ at the showdown. Don\'t rush into a weaker hand!',
+      },
+      html: () => `<div class="tut-felt"><span class="tut-timer">2.4</span>${boardHTML()}${gridHTML(false)}<div class="tut-pointer"></div></div>`,
+      play() {
+        const cards = stageCards('.tut-grid .card');
+        const ptr = stage.querySelector('.tut-pointer');
+        PICKS.forEach((idx, k) => {
+          later(500 + k * 800, () => {
+            const r = cards[idx].getBoundingClientRect();
+            const st = stage.getBoundingClientRect();
+            ptr.style.transform = `translate(${r.left - st.left + r.width / 2}px, ${r.top - st.top + r.height * 0.6}px)`;
+            ptr.classList.add('show');
+          });
+          later(850 + k * 800, () => { cards[idx].classList.add('mine'); window.SFX && SFX.select(); });
+        });
+        later(2300, () => { ptr.classList.remove('show'); window.SFX && SFX.lock(); });
+      },
+    },
+    {
+      games: ['nut'],
+      title: { ko: '쇼다운과 넛츠', en: 'Showdown and the nuts' },
+      text: {
+        ko: '<b>내 2장 + 공유 5장 중 베스트 5장</b>으로 승부해요. 쇼다운 때 가능한 최강 조합인 <b>넛츠(NUTS)</b>가 금색으로 표시되고, 넛츠를 찾은 사람에게는 NUTS 배지가 붙어요. 이 예시는 K♥·9♣로 <b>K 풀하우스</b>!',
+        en: 'You play the <b>best 5 of your 2 + the 5 community cards</b>. At the showdown the strongest possible pair, <b>the NUTS</b>, is outlined in gold, and anyone who found it gets a NUTS badge. Here K♥ + 9♣ makes <b>Kings full</b>!',
+      },
+      html: () => `<div class="tut-felt">${boardHTML((c) => (BEST.includes(c) ? 'hl' : 'dim'))}${gridHTML(false, (i) => (PICKS.includes(i) ? 'mine nuts hl' : 'dim'))}<div class="tut-badge">${L({ ko: 'K 풀하우스 · NUTS', en: 'Kings full · NUTS' })}</div></div>`,
+      play() {
+        later(400, () => { stage.querySelector('.tut-badge').classList.add('show'); window.SFX && SFX.win(); });
       },
     },
     {
@@ -208,7 +262,7 @@ const Tutorial = (() => {
   }
 
   function open(gameId = 'memory', at = 0) {
-    steps = STEPS.filter((s) => !s.only || s.only === gameId);
+    steps = STEPS.filter((s) => !s.games || s.games.includes(gameId));
     el.classList.add('show');
     go(at);
   }
