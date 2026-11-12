@@ -1,4 +1,4 @@
-const crypto = require('crypto');
+﻿const crypto = require('crypto');
 const { makeDeck, shuffle } = require('../cards');
 const { bestHand, compareScores } = require('../handEval');
 
@@ -13,14 +13,14 @@ const CFG = {
   maxRounds: 10,
   antes: [50, 50, 100, 100, 150, 150, 200, 200, 300, 300],
 };
-const LETTERS = 'ABCDEFGHIJKLMNOP'.split('');
-const ACTIVE_PHASES = ['memorize', 'reveal', 'pick', 'showdown'];
+const ACTIVE_PHASES = ['memorize', 'reveal', 'shuffle', 'pick', 'showdown'];
 
 /**
  * 기억 포커 (Memory Poker)
- * 16 cards are shown for 30s, then flipped to their letter backs (A–P).
- * 5 community cards are dealt; each player secretly picks 2 letters
- * (both players may pick the same letter). Best 5 of 7 wins the pot.
+ * 16 cards are shown face up, then flipped face down (players remember
+ * positions only). 5 community cards are dealt; each player secretly picks
+ * 2 positions (both may pick the same card). Best 5 of 7 wins the pot.
+ * Variants (see shuffleMemory.js) extend this class and override the hooks.
  *
  * The server is authoritative: card identities in the grid are only sent
  * to clients during memorize / showdown / gameover.
@@ -42,7 +42,7 @@ class MemoryPoker {
 
   constructor(room, settings) {
     this.room = room;
-    this.settings = MemoryPoker.normalizeSettings(settings);
+    this.settings = this.constructor.normalizeSettings(settings);
     this.memorizeMs = this.settings.memorizeSec * 1000;
     this.pickMs = this.settings.pickSec * 1000;
     this.ps = new Map();
@@ -60,7 +60,7 @@ class MemoryPoker {
   }
 
   canJoin() {
-    return this.phase === 'lobby' && this.players.length < MemoryPoker.meta.maxPlayers;
+    return this.phase === 'lobby' && this.players.length < this.constructor.meta.maxPlayers;
   }
 
   // ---- lifecycle -------------------------------------------------------
@@ -103,7 +103,7 @@ class MemoryPoker {
   onLeave(playerId, name) {
     this.ps.delete(playerId);
     if (ACTIVE_PHASES.includes(this.phase) || this.phase === 'gameover') {
-      this.toLobby(`${name}님이 나가서 게임이 종료되었습니다.`);
+      this.toLobby({ code: 'srv.oppLeft', name, at: Date.now() });
     } else {
       for (const s of this.ps.values()) s.ready = false;
     }
@@ -141,7 +141,7 @@ class MemoryPoker {
       case 'ready': {
         if (this.phase !== 'lobby' && this.phase !== 'gameover') return;
         s.ready = !s.ready;
-        const full = this.players.length === MemoryPoker.meta.maxPlayers;
+        const full = this.players.length === this.constructor.meta.maxPlayers;
         if (full && this.players.every((p) => this.ps.get(p.id).ready)) return this.startGame();
         break;
       }
@@ -214,7 +214,22 @@ class MemoryPoker {
   }
 
   startReveal() {
-    this.setPhase('reveal', CFG.revealMs, () => this.startPick());
+    this.setPhase('reveal', CFG.revealMs, () => this.afterReveal());
+  }
+
+  // Hook: variants insert extra phases between the flip and picking.
+  afterReveal() {
+    this.startPick();
+  }
+
+  // Hook: phases in which the community cards are visible.
+  boardPhases() {
+    return ['reveal', 'pick', 'showdown', 'gameover'];
+  }
+
+  // Hook: extra per-variant view fields.
+  extraView() {
+    return {};
   }
 
   startPick() {
@@ -222,7 +237,7 @@ class MemoryPoker {
   }
 
   showdown() {
-    // Anyone who didn't finish picking gets random letters.
+    // Anyone who didn't finish picking gets random cards.
     for (const p of this.players) {
       const s = this.ps.get(p.id);
       while (s.picks.length < CFG.picks) {
@@ -281,11 +296,12 @@ class MemoryPoker {
 
   viewFor(viewerId) {
     const showGrid = ['memorize', 'showdown', 'gameover'].includes(this.phase);
-    const showBoard = ['reveal', 'pick', 'showdown', 'gameover'].includes(this.phase);
+    const showBoard = this.boardPhases().includes(this.phase);
     const showAllPicks = this.phase === 'showdown' || this.phase === 'gameover';
 
     return {
-      game: MemoryPoker.meta.id,
+      game: this.constructor.meta.id,
+      gameName: this.constructor.meta.name,
       phase: this.phase,
       dealId: this.dealId,
       round: this.round,
@@ -294,9 +310,9 @@ class MemoryPoker {
       pot: this.pot,
       deadline: this.deadline,
       settings: this.settings,
-      durations: { memorize: this.memorizeMs, reveal: CFG.revealMs, pick: this.pickMs, showdown: CFG.showdownMs },
+      durations: { memorize: this.memorizeMs, reveal: CFG.revealMs, shuffle: this.shuffleMs || 0, pick: this.pickMs, showdown: CFG.showdownMs },
       notice: this.notice,
-      grid: this.grid.map((card, i) => ({ letter: LETTERS[i], card: showGrid ? card : null })),
+      grid: this.grid.map((card) => ({ card: showGrid ? card : null })),
       board: showBoard ? this.board : [],
       players: this.players.map((p) => {
         const s = this.ps.get(p.id);
@@ -315,8 +331,10 @@ class MemoryPoker {
       }),
       result: showAllPicks ? this.result : null,
       final: this.final,
+      ...this.extraView(),
     };
   }
 }
 
+MemoryPoker.CFG = CFG;
 module.exports = MemoryPoker;

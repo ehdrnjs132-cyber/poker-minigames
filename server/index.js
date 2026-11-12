@@ -1,4 +1,4 @@
-const path = require('path');
+﻿const path = require('path');
 const http = require('http');
 const crypto = require('crypto');
 const express = require('express');
@@ -6,10 +6,15 @@ const { Server } = require('socket.io');
 
 const GAMES = {
   memory: require('./games/memoryPoker'),
+  shuffle: require('./games/shuffleMemory'),
 };
 
 const PORT = process.env.PORT || 3000;
 const ROOM_IDLE_MS = 3 * 60 * 1000;
+const CHAT_HISTORY = 40;
+const CHAT_MAX_LEN = 120;
+const CHAT_BURST = 5;          // messages allowed per window
+const CHAT_WINDOW_MS = 4000;
 
 const app = express();
 app.use(express.static(path.join(__dirname, '..', 'public')));
@@ -31,13 +36,13 @@ function genCode() {
 
 function cleanName(name) {
   const n = String(name || '').replace(/\s+/g, ' ').trim().slice(0, 12);
-  return n || '플레이어';
+  return n || 'Player';
 }
 
 function createRoom(gameId, settings) {
   const Game = GAMES[gameId];
   if (!Game) return null;
-  const room = { code: genCode(), gameId, players: [], cleanupTimer: null };
+  const room = { code: genCode(), gameId, players: [], chat: [], chatSeq: 0, cleanupTimer: null };
   room.broadcast = () => broadcast(room);
   room.game = new Game(room, settings && typeof settings === 'object' ? settings : {});
   rooms.set(room.code, room);
@@ -56,6 +61,13 @@ function broadcast(room) {
       ...room.game.viewFor(p.id),
     });
   }
+}
+
+function postChat(room, msg) {
+  const full = { id: ++room.chatSeq, at: Date.now(), ...msg };
+  room.chat.push(full);
+  if (room.chat.length > CHAT_HISTORY) room.chat.shift();
+  for (const p of room.players) if (p.socketId) io.to(p.socketId).emit('chat', full);
 }
 
 function scheduleCleanup(room) {
@@ -78,12 +90,13 @@ io.on('connection', (socket) => {
   function attach(room, player) {
     if (ctx && ctx.player !== player) detach();
     if (player.socketId && player.socketId !== socket.id) {
-      io.to(player.socketId).emit('kicked', '다른 창에서 같은 자리로 접속했습니다.');
+      io.to(player.socketId).emit('kicked', { code: 'srv.kicked' });
     }
     player.socketId = socket.id;
     player.connected = true;
     ctx = { room, player };
     clearTimeout(room.cleanupTimer);
+    socket.emit('chatHistory', room.chat);
     room.broadcast();
   }
 
@@ -93,13 +106,33 @@ io.on('connection', (socket) => {
     ctx = null;
     room.players = room.players.filter((p) => p !== player);
     room.game.onLeave(player.id, player.name);
-    if (room.players.length === 0) destroyRoom(room);
-    else room.broadcast();
+    if (room.players.length === 0) return destroyRoom(room);
+    postChat(room, { kind: 'system', code: 'sys.left', name: player.name });
+    room.broadcast();
   }
+
+  const chatTimes = [];
+  socket.on('chat', (msg) => {
+    if (!ctx || !msg || typeof msg !== 'object') return;
+    const now = Date.now();
+    while (chatTimes.length && now - chatTimes[0] > CHAT_WINDOW_MS) chatTimes.shift();
+    if (chatTimes.length >= CHAT_BURST) return socket.emit('chatError', { code: 'srv.chatFast' });
+    const { player, room } = ctx;
+    const base = { playerId: player.id, name: player.name };
+    if (msg.kind === 'sticker' && /^[a-z0-9]{1,16}$/.test(String(msg.sticker))) {
+      chatTimes.push(now);
+      postChat(room, { ...base, kind: 'sticker', sticker: msg.sticker });
+    } else if (msg.kind === 'text') {
+      const text = String(msg.text || '').replace(/\s+/g, ' ').trim().slice(0, CHAT_MAX_LEN);
+      if (!text) return;
+      chatTimes.push(now);
+      postChat(room, { ...base, kind: 'text', text });
+    }
+  });
 
   socket.on('create', ({ name, gameId, settings } = {}, ack) => {
     const room = createRoom(gameId, settings);
-    if (!room) return reply(ack, { ok: false, error: '없는 게임입니다.' });
+    if (!room) return reply(ack, { ok: false, code: 'srv.noGame' });
     const player = { id: crypto.randomUUID(), name: cleanName(name), connected: true, socketId: null };
     room.players.push(player);
     room.game.onJoin(player);
@@ -109,7 +142,7 @@ io.on('connection', (socket) => {
 
   socket.on('join', ({ name, code, playerId } = {}, ack) => {
     const room = rooms.get(String(code || '').toUpperCase());
-    if (!room) return reply(ack, { ok: false, error: '방을 찾을 수 없습니다.' });
+    if (!room) return reply(ack, { ok: false, code: 'srv.notFound' });
 
     const existing = playerId && room.players.find((p) => p.id === playerId);
     if (existing) {
@@ -118,13 +151,14 @@ io.on('connection', (socket) => {
     }
     if (!room.game.canJoin()) {
       const full = room.players.length >= room.game.constructor.meta.maxPlayers;
-      return reply(ack, { ok: false, error: full ? '방이 가득 찼습니다.' : '이미 게임이 진행 중입니다.' });
+      return reply(ack, { ok: false, code: full ? 'srv.full' : 'srv.inProgress' });
     }
     const player = { id: crypto.randomUUID(), name: cleanName(name), connected: true, socketId: null };
     room.players.push(player);
     room.game.onJoin(player);
     reply(ack, { ok: true, code: room.code, playerId: player.id });
     attach(room, player);
+    postChat(room, { kind: 'system', code: 'sys.joined', name: player.name });
   });
 
   socket.on('action', (action) => {

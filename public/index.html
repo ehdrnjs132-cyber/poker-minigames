@@ -7,12 +7,13 @@
   <meta name="description" content="친구들과 함께하는 포커 룰 미니게임" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link href="https://fonts.googleapis.com/css2?family=Black+Han+Sans&family=Noto+Sans+KR:wght@400;500;700;900&family=Oswald:wght@500;600;700&display=swap" rel="stylesheet" />
+  <link href="https://fonts.googleapis.com/css2?family=Black+Han+Sans&family=Gaegu:wght@700&family=Noto+Sans+KR:wght@400;500;700;900&family=Oswald:wght@500;600;700&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="style.css" />
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Cpath fill='%23f5c451' d='M32 4C22 18 8 24 8 38c0 8 6 13 13 13 4 0 7-2 9-4-1 5-3 9-6 13h16c-3-4-5-8-6-13 2 2 5 4 9 4 7 0 13-5 13-13C56 24 42 18 32 4z'/%3E%3C/svg%3E" />
 </head>
 <body>
   <canvas id="bg" aria-hidden="true"></canvas>
+  <button class="lang-toggle lang-fixed">EN</button>
 
   <!-- ===== LOBBY ===== -->
   <main id="lobby" class="screen active">
@@ -35,43 +36,55 @@
         <rect x="14" y="96" width="172" height="34" rx="6" fill="url(#gRed)" stroke="url(#gGold)" stroke-width="3" />
         <text x="100" y="120" text-anchor="middle" font-family="Oswald, sans-serif" font-weight="700" font-size="20" letter-spacing="3" fill="#fff4cf">HOLDEM ARCADE</text>
       </svg>
-      <p class="tagline">친구들과 함께하는 포커 룰 미니게임</p>
+      <p class="tagline" data-i18n="tagline">친구들과 함께하는 포커 룰 미니게임</p>
     </header>
 
     <section class="panel">
       <label class="field">
-        <span>닉네임</span>
-        <input id="nameInput" maxlength="12" autocomplete="nickname" placeholder="닉네임을 입력하세요" />
+        <span data-i18n="nick.label">닉네임</span>
+        <input id="nameInput" maxlength="12" autocomplete="nickname" placeholder="닉네임을 입력하세요" data-i18n-ph="nick.ph" />
       </label>
 
-      <h2 class="section-title">게임 선택 <small>방을 만들고 친구를 초대하세요</small></h2>
+      <h2 class="section-title"><span data-i18n="games.title">게임 선택</span> <small data-i18n="games.sub">방을 만들고 친구를 초대하세요</small></h2>
       <div class="games">
         <button class="game-card" data-game="memory">
           <div class="gc-art">
             <span class="mini-card back"></span><span class="mini-card mface red">A<i>♥</i></span><span class="mini-card back"></span>
           </div>
           <div class="gc-body">
-            <b>기억 포커</b>
-            <p>16장의 위치를 외우고, 뒤집힌 카드 중 2장을 골라 최강의 족보를 만드세요.</p>
-            <span class="gc-meta">2인 · 약 5분</span>
+            <b data-i18n="game.memory">기억 포커</b>
+            <p data-i18n="game.memory.desc"></p>
+            <span class="gc-meta" data-i18n="game.memory.meta"></span>
           </div>
-          <span class="gc-cta">방 만들기</span>
+          <span class="gc-cta" data-i18n="cta.create">방 만들기</span>
+        </button>
+        <button class="game-card" data-game="shuffle">
+          <div class="gc-art shuffle-art">
+            <span class="mini-card back"></span><span class="mini-card back"></span><span class="mini-card back"></span>
+            <svg class="swap-arrow" viewBox="0 0 120 40" aria-hidden="true"><path d="M18 30 Q60 -6 102 30" fill="none" stroke="#ffe08a" stroke-width="4" stroke-linecap="round" stroke-dasharray="2 9"/><path d="M94 22 l9 9 -12 2" fill="none" stroke="#ffe08a" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          </div>
+          <div class="gc-body">
+            <b><span data-i18n="game.shuffle">셔플 메모리</span> <span class="gc-new">NEW</span></b>
+            <p data-i18n="game.shuffle.desc"></p>
+            <span class="gc-meta" data-i18n="game.shuffle.meta"></span>
+          </div>
+          <span class="gc-cta" data-i18n="cta.create">방 만들기</span>
         </button>
         <button class="game-card locked" data-game="soon1" aria-disabled="true">
           <div class="gc-art dim"><span class="mini-card back">?</span><span class="mini-card back">?</span></div>
-          <div class="gc-body"><b>너트 레이스</b><p>준비 중인 게임입니다.</p><span class="gc-meta">COMING SOON</span></div>
+          <div class="gc-body"><b data-i18n="game.nut">너트 레이스</b><p data-i18n="game.soon"></p><span class="gc-meta">COMING SOON</span></div>
         </button>
         <button class="game-card locked" data-game="soon2" aria-disabled="true">
           <div class="gc-art dim"><span class="mini-card back">?</span><span class="mini-card back">?</span></div>
-          <div class="gc-body"><b>아웃츠 헌터</b><p>준비 중인 게임입니다.</p><span class="gc-meta">COMING SOON</span></div>
+          <div class="gc-body"><b data-i18n="game.outs">아웃츠 헌터</b><p data-i18n="game.soon"></p><span class="gc-meta">COMING SOON</span></div>
         </button>
       </div>
 
-      <button class="tut-link" data-tutorial>처음이신가요? <b>기억 포커 게임 방법 보기 →</b></button>
+      <button class="tut-link" data-tutorial="memory"><span data-i18n="tut.q">처음이신가요?</span> <b data-i18n="tut.go">게임 방법 보기 →</b></button>
 
       <div class="join">
-        <input id="codeInput" maxlength="4" placeholder="방 코드" autocomplete="off" spellcheck="false" />
-        <button id="joinBtn" class="btn gold">참가하기</button>
+        <input id="codeInput" maxlength="4" placeholder="방 코드" data-i18n-ph="join.ph" autocomplete="off" spellcheck="false" />
+        <button id="joinBtn" class="btn gold" data-i18n="join.btn">참가하기</button>
       </div>
     </section>
   </main>
@@ -79,20 +92,21 @@
   <!-- ===== ROOM ===== -->
   <main id="room" class="screen">
     <div class="topbar">
-      <button id="leaveBtn" class="icon-btn" title="나가기" aria-label="나가기">
+      <button id="leaveBtn" class="icon-btn" data-i18n-label="leave">
         <svg viewBox="0 0 24 24"><path d="M15 6l-6 6 6 6" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
       </button>
-      <button id="codeChip" class="code-chip" title="초대 링크 복사">ROOM <b id="roomCode">----</b>
+      <button id="codeChip" class="code-chip" data-i18n-label="invite.copy">ROOM <b id="roomCode">----</b>
         <svg viewBox="0 0 24 24"><rect x="8" y="8" width="12" height="12" rx="2" fill="none" stroke="currentColor" stroke-width="2"/><path d="M16 8V5a1 1 0 0 0-1-1H5a1 1 0 0 0-1 1v10a1 1 0 0 0 1 1h3" fill="none" stroke="currentColor" stroke-width="2"/></svg>
       </button>
       <div class="info-chips">
         <span class="chip-info"><em>ROUND</em><b id="roundInfo">-</b></span>
         <span class="chip-info"><em>ANTE</em><b id="anteInfo">-</b></span>
       </div>
-      <button class="icon-btn" data-tutorial title="게임 방법" aria-label="게임 방법">
+      <button class="icon-btn" data-tutorial data-i18n-label="howto">
         <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9.5" fill="none" stroke="currentColor" stroke-width="2"/><path d="M9.3 9.4a2.8 2.8 0 0 1 5.4 1c0 1.9-2.7 2.3-2.7 4" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><circle cx="12" cy="17.6" r="1.2" fill="currentColor"/></svg>
       </button>
-      <button id="muteBtn" class="icon-btn" title="소리" aria-label="소리 켜기/끄기"></button>
+      <button id="muteBtn" class="icon-btn" data-i18n-label="sound"></button>
+      <button class="lang-toggle lang-chip">EN</button>
     </div>
 
     <div class="stage">
@@ -124,33 +138,67 @@
     </div>
 
     <div id="overlay" class="overlay"></div>
-    <div id="netState" class="net-state">서버에 다시 연결하는 중…</div>
+    <div id="netState" class="net-state" data-i18n="net.reconnecting">서버에 다시 연결하는 중…</div>
+
+    <!-- chat -->
+    <button id="chatFab" class="chat-fab" data-i18n-label="chat.open">
+      <svg viewBox="0 0 24 24"><path d="M4 5.5A2.5 2.5 0 0 1 6.5 3h11A2.5 2.5 0 0 1 20 5.5v8a2.5 2.5 0 0 1-2.5 2.5H10l-4.2 3.6c-.5.4-1.3.1-1.3-.6V16A2.5 2.5 0 0 1 4 13.5z" fill="currentColor"/><circle cx="8.5" cy="9.5" r="1.3" fill="#0b1a48"/><circle cx="12" cy="9.5" r="1.3" fill="#0b1a48"/><circle cx="15.5" cy="9.5" r="1.3" fill="#0b1a48"/></svg>
+      <span id="chatBadge" class="chat-badge">0</span>
+    </button>
+    <aside id="chatPanel" class="chat-panel" aria-label="채팅">
+      <header class="chat-head">
+        <b data-i18n="chat.title">채팅</b>
+        <button id="chatClose" class="icon-btn" data-i18n-label="chat.close"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/></svg></button>
+      </header>
+      <div id="chatList" class="chat-list"></div>
+      <div id="stickerTray" class="sticker-tray"></div>
+      <form id="chatForm" class="chat-input" autocomplete="off">
+        <button type="button" id="stickerBtn" class="sticker-btn" data-i18n-label="chat.stickers">
+          <svg viewBox="0 0 24 24"><path d="M5 9.5Q4 4 9 6.3a8 8 0 0 1 6 0Q20 4 19 9.5a8 7 0 1 1-14 0z" fill="#fff" stroke="#4a3b3b" stroke-width="1.4" stroke-linejoin="round"/><circle cx="9.3" cy="12" r="1" fill="#4a3b3b"/><circle cx="14.7" cy="12" r="1" fill="#4a3b3b"/><ellipse cx="7.4" cy="14" rx="1.3" ry=".8" fill="#ffb3c1"/><ellipse cx="16.6" cy="14" rx="1.3" ry=".8" fill="#ffb3c1"/><path d="M10.8 14q.6.8 1.2 0 .6.8 1.2 0" fill="none" stroke="#4a3b3b" stroke-width="1" stroke-linecap="round"/></svg>
+        </button>
+        <input id="chatInput" maxlength="120" placeholder="메시지 입력" data-i18n-ph="chat.ph" enterkeyhint="send" />
+        <button type="submit" class="send" data-i18n-label="chat.send"><svg viewBox="0 0 24 24"><path d="M4 12l16-8-6 16-2.5-6.5z" fill="currentColor"/></svg></button>
+      </form>
+    </aside>
   </main>
 
   <!-- ===== CREATE-ROOM SETTINGS ===== -->
   <div id="setup" class="overlay" role="dialog" aria-modal="true" aria-labelledby="setupTitle">
     <div class="result-card setup-card">
-      <h2 id="setupTitle">방 설정</h2>
-      <p class="reason">기억 포커 · 2인 · <button class="tut-inline" data-tutorial>게임 방법</button></p>
+      <h2 id="setupTitle" data-i18n="setup.title">방 설정</h2>
+      <p class="reason"><span id="setupGameName">기억 포커</span> · <span data-i18n="players2">2인</span> · <button class="tut-inline" id="setupTutorial" data-tutorial="memory" data-i18n="howto">게임 방법</button></p>
       <div class="setting">
-        <div class="setting-head"><b>기억 시간</b><span><em id="memVal">30</em>초</span></div>
+        <div class="setting-head"><b data-i18n="setup.memorize">기억 시간</b><span><em id="memVal">30</em><span data-i18n="sec">초</span></span></div>
         <div class="seg" data-key="memorizeSec">
           <button data-v="10">10</button><button data-v="15">15</button><button data-v="20">20</button>
           <button data-v="30">30</button><button data-v="45">45</button><button data-v="60">60</button>
         </div>
-        <input type="range" min="5" max="90" step="1" data-key="memorizeSec" aria-label="기억 시간(초)" />
+        <input type="range" min="5" max="90" step="1" data-key="memorizeSec" data-i18n-label="setup.memorize" />
       </div>
       <div class="setting">
-        <div class="setting-head"><b>선택 시간</b><span><em id="pickVal">20</em>초</span></div>
+        <div class="setting-head"><b data-i18n="setup.pick">선택 시간</b><span><em id="pickVal">20</em><span data-i18n="sec">초</span></span></div>
         <div class="seg" data-key="pickSec">
           <button data-v="10">10</button><button data-v="15">15</button><button data-v="20">20</button>
           <button data-v="30">30</button><button data-v="45">45</button><button data-v="60">60</button>
         </div>
-        <input type="range" min="5" max="60" step="1" data-key="pickSec" aria-label="선택 시간(초)" />
+        <input type="range" min="5" max="60" step="1" data-key="pickSec" data-i18n-label="setup.pick" />
+      </div>
+      <div class="setting" data-only="shuffle">
+        <div class="setting-head"><b data-i18n="setup.swaps">섞는 횟수</b><span data-i18n="setup.swapsHint">많을수록 어려워요</span></div>
+        <div class="seg seg-5" data-key="swaps">
+          <button data-v="3" data-i18n-times="3"></button><button data-v="5" data-i18n-times="5"></button><button data-v="8" data-i18n-times="8"></button>
+          <button data-v="12" data-i18n-times="12"></button><button data-v="16" data-i18n-times="16"></button>
+        </div>
+      </div>
+      <div class="setting" data-only="shuffle">
+        <div class="setting-head"><b data-i18n="setup.speed">섞는 속도</b></div>
+        <div class="seg seg-3" data-key="speed">
+          <button data-v="slow" data-i18n="speed.slow"></button><button data-v="normal" data-i18n="speed.normal"></button><button data-v="fast" data-i18n="speed.fast"></button>
+        </div>
       </div>
       <div class="result-actions">
-        <button class="btn ghost" id="setupCancel">취소</button>
-        <button class="btn gold big" id="setupCreate">방 만들기</button>
+        <button class="btn ghost" id="setupCancel" data-i18n="cancel">취소</button>
+        <button class="btn gold big" id="setupCreate" data-i18n="cta.create">방 만들기</button>
       </div>
     </div>
   </div>
@@ -158,7 +206,7 @@
   <!-- ===== TUTORIAL ===== -->
   <div id="tutorial" class="overlay" role="dialog" aria-modal="true" aria-labelledby="tutTitle">
     <div class="result-card tut-card">
-      <button class="tut-close icon-btn" id="tutClose" aria-label="닫기">
+      <button class="tut-close icon-btn" id="tutClose" data-i18n-label="close">
         <svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/></svg>
       </button>
       <div class="tut-step" id="tutStep"></div>
@@ -167,7 +215,7 @@
       <p class="tut-text" id="tutText"></p>
       <div class="tut-dots" id="tutDots"></div>
       <div class="result-actions">
-        <button class="btn ghost" id="tutPrev">이전</button>
+        <button class="btn ghost" id="tutPrev" data-i18n="prev">이전</button>
         <button class="btn gold big" id="tutNext">다음</button>
       </div>
     </div>
@@ -176,9 +224,12 @@
   <div id="toast" class="toast" role="status" aria-live="polite"></div>
 
   <script src="/socket.io/socket.io.js"></script>
+  <script src="i18n.js"></script>
   <script src="sfx.js"></script>
   <script src="bg.js"></script>
+  <script src="stickers.js"></script>
   <script src="app.js"></script>
+  <script src="chat.js"></script>
   <script src="tutorial.js"></script>
 </body>
 </html>

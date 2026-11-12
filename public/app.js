@@ -72,6 +72,7 @@
     f.innerHTML = faceHTML(code) + (letter ? `<span class="flabel">${letter}</span>` : '');
   }
   window.cardHTML = cardHTML; // shared with tutorial.js
+  window.HA = { socket, toast, me: () => S?.me || session.get()?.playerId }; // shared with chat.js
 
   // Force a style flush so a class change right after insertion still transitions.
   const reflow = (el) => void el.offsetWidth;
@@ -86,7 +87,7 @@
   function getName() {
     const n = nameInput.value.trim().slice(0, 12);
     if (!n) {
-      toast('닉네임을 입력하세요');
+      toast(t('err.nick'));
       nameInput.focus();
       return null;
     }
@@ -96,7 +97,7 @@
 
   document.querySelectorAll('[data-game]').forEach((btn) =>
     btn.addEventListener('click', () => {
-      if (btn.classList.contains('locked')) return toast('준비 중인 게임입니다');
+      if (btn.classList.contains('locked')) return toast(t('err.soon'));
       if (!getName()) return;
       SFX.click();
       openSetup(btn.dataset.game);
@@ -106,14 +107,17 @@
   // ---- create-room settings modal (last choice remembered per browser)
   const setupEl = $('#setup');
   let setupGame = null;
-  let settings = { memorizeSec: 30, pickSec: 20 };
+  let settings = { memorizeSec: 30, pickSec: 20, swaps: 5, speed: 'normal' };
   try { Object.assign(settings, JSON.parse(pref.get('roomSettings')) || {}); } catch {}
 
   function renderSetup() {
     $('#memVal').textContent = settings.memorizeSec;
     $('#pickVal').textContent = settings.pickSec;
     setupEl.querySelectorAll('.seg').forEach((seg) =>
-      seg.querySelectorAll('button').forEach((b) => b.classList.toggle('on', Number(b.dataset.v) === settings[seg.dataset.key])));
+      seg.querySelectorAll('button').forEach((b) => b.classList.toggle('on', b.dataset.v === String(settings[seg.dataset.key]))));
+    setupEl.querySelectorAll('[data-only]').forEach((row) => (row.hidden = row.dataset.only !== setupGame));
+    $('#setupGameName').textContent = t(`game.${setupGame}`);
+    $('#setupTutorial').dataset.tutorial = setupGame;
     setupEl.querySelectorAll('input[type=range]').forEach((r) => (r.value = settings[r.dataset.key]));
   }
   function openSetup(gameId) {
@@ -127,7 +131,8 @@
     seg.addEventListener('click', (e) => {
       const b = e.target.closest('button');
       if (!b) return;
-      settings[seg.dataset.key] = Number(b.dataset.v);
+      const v = b.dataset.v;
+      settings[seg.dataset.key] = /^\d+$/.test(v) ? Number(v) : v;
       SFX.click();
       renderSetup();
     }));
@@ -149,7 +154,7 @@
     const name = getName();
     if (!name) return;
     const code = codeInput.value.trim().toUpperCase();
-    if (code.length !== 4) return toast('4자리 방 코드를 입력하세요');
+    if (code.length !== 4) return toast(t('err.code'));
     SFX.click();
     socket.emit('join', { name, code }, onJoined);
   }
@@ -158,7 +163,7 @@
   codeInput.addEventListener('input', () => (codeInput.value = codeInput.value.toUpperCase().replace(/[^A-Z0-9]/g, '')));
 
   function onJoined(res) {
-    if (!res || !res.ok) return toast(res?.error || '입장에 실패했습니다');
+    if (!res || !res.ok) return toast(I18N.msg(res) || t('err.joinFail'));
     session.set({ code: res.code, playerId: res.playerId });
     history.replaceState(null, '', `?room=${res.code}`);
   }
@@ -170,6 +175,8 @@
     S = P = null;
     dealKey = null;
     boardKey = undefined;
+    window.currentGameId = null;
+    window.Chat && Chat.reset();
   }
   function showRoom() {
     if ($('#room').classList.contains('active')) return;
@@ -187,7 +194,7 @@
       if (!res?.ok) {
         session.clear();
         showLobby();
-        toast(res?.error || '방이 종료되었습니다');
+        toast(I18N.msg(res) || t('err.roomClosed'));
       }
     });
   });
@@ -195,19 +202,20 @@
   socket.on('kicked', (msg) => {
     session.clear();
     showLobby();
-    toast(msg);
+    toast(I18N.msg(msg));
   });
   socket.on('state', (st) => {
     offset = st.now - Date.now();
     P = S;
     S = st;
+    window.currentGameId = st.gameId;
     showRoom();
     render();
   });
 
   // ------------------------------------------------------------- room controls
   $('#leaveBtn').addEventListener('click', () => {
-    if (S && !['lobby', 'gameover'].includes(S.phase) && !confirm('게임 중에 나가면 게임이 종료됩니다. 나갈까요?')) return;
+    if (S && !['lobby', 'gameover'].includes(S.phase) && !confirm(t('confirm.leave'))) return;
     socket.emit('leave');
     session.clear();
     history.replaceState(null, '', location.pathname);
@@ -220,9 +228,9 @@
     const localOnly = ['localhost', '127.0.0.1', '[::1]'].includes(location.hostname);
     (navigator.clipboard?.writeText(url) || Promise.reject())
       .then(() => toast(localOnly
-        ? '복사했지만 localhost 링크는 내 PC에서만 열립니다. 배포 주소나 내 IP 주소로 접속해서 초대하세요.'
-        : '초대 링크를 복사했습니다', localOnly ? 5000 : 2400))
-      .catch(() => toast(`방 코드: ${S.code}`));
+        ? t('invite.local')
+        : t('invite.copied'), localOnly ? 5000 : 2400))
+      .catch(() => toast(t('invite.code', { code: S.code })));
   }
   const muteBtn = $('#muteBtn');
   function renderMute() {
@@ -249,7 +257,7 @@
     if (!S || S.phase !== 'pick') return;
     const me = S.players.find((p) => p.id === S.me);
     if (!me || me.locked) return;
-    if (!(me.picks || []).includes(i) && me.pickCount >= 2) return toast('이미 2장을 골랐어요. 선택한 카드를 눌러 취소하세요.');
+    if (!(me.picks || []).includes(i) && me.pickCount >= 2) return toast(t('pick.max'));
     SFX.select();
     act('pick', { index: i });
   }
@@ -273,19 +281,20 @@
     renderSeat($('#seatOpp'), opp, false, ctx);
     renderSeat($('#seatMe'), me, true, ctx);
     renderGrid(ctx);
+    runShuffle();
     renderBoard(ctx);
     renderStatus(ctx);
     renderActions(ctx);
     renderOverlay(ctx);
     phaseEffects(ctx);
 
-    if (S.notice && S.notice !== P?.notice) toast(S.notice, 3500);
+    if (S.notice && JSON.stringify(S.notice) !== JSON.stringify(P?.notice)) toast(I18N.msg(S.notice), 3500);
   }
 
   function renderSeat(el, p, isMe, { inResult, hlCards }) {
     if (!p) {
       el.className = `seat ${isMe ? 'me' : 'opp'} empty`;
-      setHTML(el, `<span class="dots">상대를 기다리는 중</span>`);
+      setHTML(el, `<span class="dots">${t('seat.waiting')}</span>`);
       return;
     }
     const ph = S.phase;
@@ -294,11 +303,11 @@
     el.className = `seat ${isMe ? 'me' : 'opp'}${isWinner ? ' winner' : ''}`;
 
     let badge = '';
-    if (!p.connected) badge = '<span class="badge warn">연결 끊김</span>';
-    else if (ph === 'lobby' || ph === 'gameover') badge = p.ready ? '<span class="badge ok">준비 완료</span>' : '<span class="badge">대기 중</span>';
-    else if (ph === 'memorize') badge = p.memorized ? '<span class="badge ok">기억 완료</span>' : '<span class="badge">기억 중…</span>';
-    else if (ph === 'pick') badge = p.locked ? '<span class="badge ok">선택 확정</span>' : `<span class="badge">선택 중 ${p.pickCount}/2</span>`;
-    else if (hand) badge = `<span class="badge hand">${esc(hand.desc)}</span>`;
+    if (!p.connected) badge = `<span class="badge warn">${t('badge.off')}</span>`;
+    else if (ph === 'lobby' || ph === 'gameover') badge = p.ready ? `<span class="badge ok">${t('badge.ready')}</span>` : `<span class="badge">${t('badge.wait')}</span>`;
+    else if (ph === 'memorize') badge = p.memorized ? `<span class="badge ok">${t('badge.memorized')}</span>` : `<span class="badge">${t('badge.memorizing')}</span>`;
+    else if (ph === 'pick') badge = p.locked ? `<span class="badge ok">${t('badge.locked')}</span>` : `<span class="badge">${t('badge.picking', { n: p.pickCount })}</span>`;
+    else if (hand) badge = `<span class="badge hand">${esc(I18N.hand(hand.score))}</span>`;
 
     let delta = '';
     if (ph === 'showdown' && S.result) {
@@ -325,7 +334,7 @@
     setHTML(el, `
       <div class="avatar${p.connected ? '' : ' off'}" style="background:${colorFor(p.id)}">${esc(p.name[0] || '?')}</div>
       <div class="who">
-        <div class="name">${esc(p.name)}${isMe ? '<em>나</em>' : ''}</div>
+        <div class="name">${esc(p.name)}${isMe ? `<em>${t('me')}</em>` : ''}</div>
         <div class="chips"><span class="chip-icon"></span>${fmt(p.chips)} ${delta}</div>
         ${badge}
       </div>
@@ -343,7 +352,8 @@
         c.style.setProperty('--dd', `${i * 28}ms`);
         if (S.phase !== 'lobby') c.classList.add('deal-in');
         c.insertAdjacentHTML('beforeend', '<div class="tag"></div>');
-        c.addEventListener('click', () => onGridClick(i));
+        // Index by current DOM position: shuffle swaps reorder the nodes.
+        c.addEventListener('click', () => onGridClick([...g.children].indexOf(c)));
         g.appendChild(c);
       }
     }
@@ -373,8 +383,73 @@
       el.classList.toggle('dim', inResult && !picked.has(i));
       el.classList.toggle('hl', inResult && picked.has(i) && hlCards.has(info?.card));
       setHTML(el.querySelector('.tag'),
-        (mine ? '<span class="t-me">나</span>' : '') + (theirs ? `<span class="t-opp">${esc(opp.name.slice(0, 4))}</span>` : ''));
+        (mine ? `<span class="t-me">${t('me')}</span>` : '') + (theirs ? `<span class="t-opp">${esc(opp.name.slice(0, 4))}</span>` : ''));
     });
+  }
+
+  // Shell-game animation: plays the server's swap list on the face-down grid.
+  // Each swap moves the two card nodes visually, then swaps them in the DOM so
+  // grid index i always matches server position i afterwards.
+  let shuffleRun = null; // { key, queue, timer }
+  function swapNodes(a, b) {
+    const t = document.createElement('div');
+    a.parentNode.insertBefore(t, a);
+    b.parentNode.insertBefore(a, b);
+    t.parentNode.insertBefore(b, t);
+    t.remove();
+  }
+  function finishShuffle() {
+    if (!shuffleRun) return;
+    clearTimeout(shuffleRun.timer);
+    const g = $('#grid');
+    for (const el of g.children) { el.style.transition = ''; el.style.transform = ''; el.classList.remove('moving'); }
+    while (shuffleRun.queue.length) {
+      const [a, b] = shuffleRun.queue.shift();
+      const cards = [...g.children];
+      swapNodes(cards[a], cards[b]);
+    }
+    shuffleRun.done = true;
+  }
+  function runShuffle() {
+    if (S.phase !== 'shuffle') {
+      if (shuffleRun && !shuffleRun.done) finishShuffle();
+      return;
+    }
+    if (!S.shuffle || shuffleRun?.key === S.dealId) return;
+    if (shuffleRun && !shuffleRun.done) finishShuffle();
+    const { swaps, stepMs, leadMs } = S.shuffle;
+    shuffleRun = { key: S.dealId, queue: swaps.slice(), timer: null, done: false };
+    const run = shuffleRun;
+    const g = $('#grid');
+    const moveMs = Math.round(stepMs * 0.78);
+    const step = () => {
+      if (run !== shuffleRun || run.done) return;
+      if (!run.queue.length) { run.done = true; return; }
+      const [a, b] = run.queue[0];
+      const cards = [...g.children];
+      const A = cards[a], B = cards[b];
+      const ra = A.getBoundingClientRect(), rb = B.getBoundingClientRect();
+      const dx = rb.left - ra.left, dy = rb.top - ra.top;
+      for (const [el, sx, sy] of [[A, dx, dy], [B, -dx, -dy]]) {
+        el.classList.add('moving');
+        el.style.transition = `transform ${moveMs}ms cubic-bezier(.55,0,.25,1)`;
+        el.style.transform = `translate(${sx}px, ${sy}px)`;
+      }
+      SFX.swoosh();
+      run.timer = setTimeout(() => {
+        if (run !== shuffleRun || run.done) return;
+        run.queue.shift();
+        for (const el of [A, B]) { el.style.transition = 'none'; el.style.transform = ''; el.classList.remove('moving'); }
+        swapNodes(A, B);
+        reflow(A);
+        A.style.transition = B.style.transition = '';
+        run.timer = setTimeout(step, stepMs - moveMs);
+      }, moveMs);
+    };
+    // If we arrive late (e.g. reconnect), there's nothing visible to track; just apply.
+    const lateBy = S.deadline ? (S.durations.shuffle - (S.deadline - (Date.now() + offset))) : 0;
+    if (lateBy > leadMs + stepMs) finishShuffle();
+    else run.timer = setTimeout(step, Math.max(0, leadMs - lateBy));
   }
 
   function renderBoard({ inResult, hlCards }) {
@@ -384,7 +459,7 @@
       boardKey = key;
       b.innerHTML = '';
       if (S.board.length) {
-        const animate = S.phase === 'reveal' || P?.phase === 'reveal' || P?.phase === 'memorize';
+        const animate = S.phase === 'reveal' || ['reveal', 'memorize', 'shuffle'].includes(P?.phase);
         S.board.forEach((code, i) => {
           const c = makeCard('');
           setFace(c, code);
@@ -412,21 +487,23 @@
   function renderStatus({ me, opp }) {
     const ph = S.phase;
     const labels = {
-      lobby: opp ? '준비하면 시작합니다' : '상대를 기다리는 중',
-      memorize: '카드를 기억하세요!',
-      reveal: '카드가 뒤집힙니다',
-      pick: '카드 2장을 고르세요',
-      showdown: '쇼다운',
-      gameover: '게임 종료',
+      lobby: opp ? t('ph.lobbyReady') : t('ph.lobbyWait'),
+      memorize: t('ph.memorize'),
+      reveal: t('ph.reveal'),
+      shuffle: t('ph.shuffle'),
+      pick: t('ph.pick'),
+      showdown: t('ph.showdown'),
+      gameover: t('ph.gameover'),
     };
     const memSec = Math.round(S.durations.memorize / 1000);
     const pickSec = Math.round(S.durations.pick / 1000);
     const subs = {
-      lobby: `${opp ? '두 명 모두 준비하면 시작' : `방 코드 ${S.code} 를 친구에게 알려주세요`} · 기억 ${memSec}초 / 선택 ${pickSec}초`,
-      memorize: `${memSec}초 뒤 카드가 뒤집힙니다. 위치를 외우세요!`,
-      reveal: '공유 카드 5장이 깔립니다',
-      pick: '위치를 떠올려 고르세요 · 상대와 같은 카드도 가능',
-      showdown: S.result ? `팟 ${fmt(S.result.pot)}` : '',
+      lobby: [t(`game.${S.game}`), opp ? t('sub.lobbyOpp') : t('sub.lobbyCode', { code: S.code }), t('sub.times', { m: memSec, p: pickSec }), S.settings?.swaps ? t('sub.swaps', { n: S.settings.swaps }) : ''].filter(Boolean).join(' · '),
+      memorize: t('sub.memorize', { m: memSec }),
+      reveal: S.game === 'shuffle' ? t('sub.revealShuffle') : t('sub.reveal'),
+      shuffle: t('sub.shuffle'),
+      pick: t('sub.pick'),
+      showdown: S.result ? t('sub.pot', { n: fmt(S.result.pot) }) : '',
       gameover: '',
     };
     $('#phaseLabel').textContent = labels[ph] || '';
@@ -441,7 +518,7 @@
       const kind = split ? 'split' : won ? 'win' : 'lose';
       const title = split ? 'SPLIT' : won ? 'WIN!' : 'LOSE';
       banner.className = `banner ${kind}`;
-      banner.innerHTML = `${title}<small>${esc(myHand?.desc || '')}</small>`;
+      banner.innerHTML = `${title}<small>${esc(I18N.hand(myHand?.score))}</small>`;
       clearTimeout(bannerTimer);
       bannerTimer = setTimeout(() => {
         banner.classList.add('show');
@@ -460,25 +537,27 @@
     const ph = S.phase;
     let html = '';
     if (ph === 'lobby') {
-      html = `<button class="btn ghost" data-tutorial>게임 방법</button>
-        ${!opp ? '<button class="btn ghost" data-act="invite">초대 링크 복사</button>' : ''}
-        <button class="btn ${me.ready ? 'ghost' : 'gold'} big" data-act="ready">${me.ready ? '준비 취소' : '준비'}</button>`;
+      html = `<button class="btn ghost" data-tutorial>${t('howto')}</button>
+        ${!opp ? `<button class="btn ghost" data-act="invite">${t('invite.copy')}</button>` : ''}
+        <button class="btn ${me.ready ? 'ghost' : 'gold'} big" data-act="ready">${me.ready ? t('act.unready') : t('act.ready')}</button>`;
     } else if (ph === 'memorize') {
       html = me.memorized
-        ? '<span class="hint dots">상대가 외우는 중</span>'
-        : '<button class="btn blue big" data-act="memorized">다 외웠어요</button>';
+        ? `<span class="hint dots">${t('hint.oppMemorizing')}</span>`
+        : `<button class="btn blue big" data-act="memorized">${t('act.memorized')}</button>`;
     } else if (ph === 'reveal') {
-      html = '<span class="hint">집중하세요…</span>';
+      html = `<span class="hint">${t('hint.focus')}</span>`;
+    } else if (ph === 'shuffle') {
+      html = `<span class="hint">${t('hint.shuffle')}</span>`;
     } else if (ph === 'pick') {
       html = me.locked
-        ? '<span class="hint dots">상대의 선택을 기다리는 중</span>'
-        : `<span class="hint">카드를 눌러 선택 <b>${me.pickCount}/2</b></span>
-           <button class="btn gold big" data-act="lock" ${me.pickCount === 2 ? '' : 'disabled'}>선택 확정</button>`;
+        ? `<span class="hint dots">${t('hint.oppPicking')}</span>`
+        : `<span class="hint">${t('hint.tapToPick')} <b>${me.pickCount}/2</b></span>
+           <button class="btn gold big" data-act="lock" ${me.pickCount === 2 ? '' : 'disabled'}>${t('act.lock')}</button>`;
     } else if (ph === 'showdown') {
       const last = S.result?.final;
       html = me.next
-        ? '<span class="hint dots">상대를 기다리는 중</span>'
-        : `<button class="btn blue" data-act="next">${last ? '최종 결과 보기' : '다음 라운드'}</button>`;
+        ? `<span class="hint dots">${t('hint.waitOpp')}</span>`
+        : `<button class="btn blue" data-act="next">${last ? t('act.final') : t('act.nextRound')}</button>`;
     }
     setHTML(bar, html);
   }
@@ -493,11 +572,11 @@
     const { standings, championId, reason } = S.final;
     const won = championId === S.me;
     const draw = championId === null;
-    const title = draw ? '무승부' : won ? '최종 승리!' : '패배';
-    const reasonText = reason === 'bust' ? '상대의 칩이 모두 소진되었습니다' : `${S.maxRounds}라운드 종료 · 칩이 많은 쪽이 승리`;
+    const title = draw ? t('go.draw') : won ? t('go.win') : t('go.lose');
+    const reasonText = reason === 'bust' ? t('go.bust') : t('go.rounds', { n: S.maxRounds });
     const rows = standings.map((s, i) =>
-      `<div class="${i === 0 && !draw ? 'top' : ''}"><span class="rk">${i + 1}</span><span class="nm">${esc(s.name)}${s.id === S.me ? ' (나)' : ''}</span><span class="ch">${fmt(s.chips)}</span></div>`).join('');
-    const waiting = me?.ready ? (opp ? (opp.ready ? '' : '상대의 준비를 기다리는 중…') : '상대가 나갔습니다') : (opp?.ready ? '상대가 재대결을 원합니다!' : '');
+      `<div class="${i === 0 && !draw ? 'top' : ''}"><span class="rk">${i + 1}</span><span class="nm">${esc(s.name)}${s.id === S.me ? t('meSuffix') : ''}</span><span class="ch">${fmt(s.chips)}</span></div>`).join('');
+    const waiting = me?.ready ? (opp ? (opp.ready ? '' : t('go.waitOpp')) : t('go.oppGone')) : (opp?.ready ? t('go.oppWants') : '');
     setHTML(ov, `
       <div class="result-card">
         <div class="trophy">${draw ? '🤝' : won ? '🏆' : '🃏'}</div>
@@ -505,8 +584,8 @@
         <p class="reason">${reasonText}</p>
         <div class="standings">${rows}</div>
         <div class="result-actions">
-          <button class="btn ghost" data-act="exit">나가기</button>
-          <button class="btn ${me?.ready ? 'ghost' : 'gold'} big" data-act="ready">${me?.ready ? '준비 취소' : '다시 하기'}</button>
+          <button class="btn ghost" data-act="exit">${t('act.exit')}</button>
+          <button class="btn ${me?.ready ? 'ghost' : 'gold'} big" data-act="ready">${me?.ready ? t('act.unready') : t('act.rematch')}</button>
         </div>
         <div class="wait">${waiting}</div>
       </div>`);
@@ -532,6 +611,12 @@
         break;
     }
   }
+
+  I18N.apply();
+  I18N.onChange(() => {
+    if ($('#setup').classList.contains('show')) renderSetup();
+    if (S) render();
+  });
 
   // ------------------------------------------------------------- timer loop
   const timerEl = $('#timer');

@@ -74,6 +74,8 @@ const SFX = (() => {
     flipWave(n = 16, gap = 0.04, start = 0) { for (let i = 0; i < n; i++) this.flip(start + i * gap); },
     deal() { for (let i = 0; i < 5; i++) noise(0.14, { at: i * 0.12, freq: 1400, vol: 0.18, q: 0.6 }); },
     shuffle() { for (let i = 0; i < 14; i++) noise(0.05, { at: i * 0.03, freq: 2600 + Math.random() * 800, vol: 0.1 }); },
+    swoosh: () => noise(0.32, { freq: 900, vol: 0.16, q: 0.5 }),
+    pop: () => { tone(740, 0.09, { type: 'sine', vol: 0.16, slide: 1180 }); tone(1180, 0.08, { type: 'triangle', vol: 0.06, at: 0.06 }); },
     tick: () => tone(1320, 0.05, { type: 'square', vol: 0.05 }),
     lock: () => { tone(520, 0.08, { type: 'triangle', vol: 0.16 }); tone(780, 0.14, { type: 'triangle', vol: 0.14, at: 0.07 }); },
     chips() { for (let i = 0; i < 6; i++) tone(2400 + Math.random() * 1200, 0.07, { type: 'sine', vol: 0.08, at: i * 0.05 }); },
@@ -83,3 +85,5 @@ const SFX = (() => {
     fanfare() { [392, 523, 659, 784, 659, 784, 1047].forEach((f, i) => tone(f, 0.28, { type: 'triangle', vol: 0.15, at: i * 0.11 })); },
   };
 })();
+
+window.SFX = SFX;
