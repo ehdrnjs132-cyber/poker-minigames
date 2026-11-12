@@ -38,7 +38,8 @@ function wrongSpot(idx, size) {
 function memoryPlan(grid, board, level, { swaps = 0, maxDelay = Infinity } = {}) {
   const L = LEVELS[level] || LEVELS.normal;
   const pairs = rankPairs(grid, board);
-  const target = pairs[crypto.randomInt(Math.min(L.choose, pairs.length))].picks;
+  const rank = crypto.randomInt(Math.min(L.choose, pairs.length));
+  const target = pairs[rank].picks;
   const accuracy = L.remember * Math.pow(L.track, swaps);
   const picks = [];
   for (const idx of target) {
@@ -46,7 +47,11 @@ function memoryPlan(grid, board, level, { swaps = 0, maxDelay = Infinity } = {})
     while (picks.includes(pos)) pos = crypto.randomInt(grid.length);
     picks.push(pos);
   }
-  return { picks, delay: Math.min(rand(L.delay), maxDelay) };
+  // How sure the bot feels it beats one opponent: a strong target it trusts
+  // its memory of → high. Used for betting.
+  const strength = 1 - rank / pairs.length;
+  const confidence = Math.min(0.95, Math.max(0.1, 0.2 + 0.65 * accuracy * strength));
+  return { picks, delay: Math.min(rand(L.delay), maxDelay), confidence };
 }
 
 function nutPlan(grid, board, level, { maxDelay = Infinity } = {}) {

@@ -109,12 +109,13 @@
   // ---- create-room settings modal (last choice remembered per browser)
   const setupEl = $('#setup');
   let setupGame = null;
-  let settings = { players: 4, memorizeSec: 30, pickSec: 20, swaps: 5, speed: 'normal' };
+  let settings = { players: 4, memorizeSec: 30, pickSec: 20, turnSec: 20, betting: 'on', swaps: 5, speed: 'normal' };
   try { Object.assign(settings, JSON.parse(pref.get('roomSettings')) || {}); } catch {}
 
   function renderSetup() {
     $('#memVal').textContent = settings.memorizeSec;
     $('#pickVal').textContent = settings.pickSec;
+    $('#turnVal').textContent = settings.turnSec;
     setupEl.querySelectorAll('.seg').forEach((seg) =>
       seg.querySelectorAll('button').forEach((b) => b.classList.toggle('on', b.dataset.v === String(settings[seg.dataset.key]))));
     setupEl.querySelectorAll('[data-only]').forEach((row) => (row.hidden = !row.dataset.only.split(' ').includes(setupGame)));
@@ -152,14 +153,74 @@
     socket.emit('create', { name, gameId: setupGame, settings }, onJoined);
   });
 
-  function join() {
+  function join(codeArg) {
     const name = getName();
     if (!name) return;
-    const code = codeInput.value.trim().toUpperCase();
+    const code = (typeof codeArg === 'string' ? codeArg : codeInput.value).trim().toUpperCase();
     if (code.length !== 4) return toast(t('err.code'));
     SFX.click();
     socket.emit('join', { name, code }, onJoined);
   }
+
+  // ---- live room list
+  let roomsCache = [];
+  function renderRooms(list = roomsCache) {
+    roomsCache = list;
+    const box = $('#roomList');
+    $('#roomsCount').textContent = list.length ? t('rooms.count', { n: list.length }) : '';
+    if (!list.length) {
+      setHTML(box, `<div class="room-empty">${t('rooms.empty')}</div>`);
+      return;
+    }
+    setHTML(box, list.map((r) => {
+      const status = r.joinable ? t('rooms.waiting') : r.playing ? t('rooms.playing') : t('rooms.full');
+      return `<div class="room-row${r.joinable ? '' : ' closed'}">
+        <span class="room-game g-${r.gameId}">${esc(t(`game.${r.gameId}`))}</span>
+        <div class="room-info">
+          <b>${esc(t('rooms.host', { name: r.host }))}</b>
+          <span>${t('rooms.players', { n: r.players, max: r.max })}${r.bots ? ` · ${t('rooms.bots', { n: r.bots })}` : ''} · <em class="${r.joinable ? 'ok' : ''}">${status}</em></span>
+        </div>
+        <button class="btn ${r.joinable ? 'gold' : 'ghost'}" data-join="${r.code}" ${r.joinable ? '' : 'disabled'}>${t('join.btn')}</button>
+      </div>`;
+    }).join(''));
+  }
+  $('#roomList').addEventListener('click', (e) => {
+    const b = e.target.closest('[data-join]');
+    if (b && !b.disabled) join(b.dataset.join);
+  });
+  socket.on('rooms', (list) => renderRooms(list || []));
+
+  // ---- invite links (?room=CODE): show what you're joining; join at once if we know your name
+  let inviteHandled = false;
+  function handleInvite() {
+    if (inviteHandled || !urlRoom || session.get()) return;
+    inviteHandled = true;
+    socket.emit('roomInfo', urlRoom, (info) => {
+      const card = $('#inviteCard');
+      if (!info?.ok) {
+        toast(t('srv.notFound'));
+        history.replaceState(null, '', location.pathname);
+        return;
+      }
+      card.hidden = false;
+      card._info = info;
+      renderInvite();
+      if (info.joinable && pref.get('name')) join(info.code);
+      else if (info.joinable) nameInput.focus();
+    });
+  }
+  function renderInvite() {
+    const info = $('#inviteCard')._info;
+    if (!info) return;
+    $('#inviteTitle').textContent = t('invite.title', { name: info.host, game: t(`game.${info.gameId}`) });
+    $('#inviteMeta').textContent = [t('rooms.players', { n: info.players, max: info.max }),
+      info.joinable ? (pref.get('name') ? '' : t('invite.needName')) : t(info.playing ? 'srv.inProgress' : 'srv.full')].filter(Boolean).join(' · ');
+    $('#inviteJoin').disabled = !info.joinable;
+  }
+  $('#inviteJoin').addEventListener('click', () => join($('#inviteCard')._info?.code || urlRoom));
+  nameInput.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' && !$('#inviteCard').hidden) $('#inviteJoin').click();
+  });
   $('#joinBtn').addEventListener('click', join);
   codeInput.addEventListener('keydown', (e) => e.key === 'Enter' && join());
   codeInput.addEventListener('input', () => (codeInput.value = codeInput.value.toUpperCase().replace(/[^A-Z0-9]/g, '')));
@@ -168,6 +229,7 @@
     if (!res || !res.ok) return toast(I18N.msg(res) || t('err.joinFail'));
     session.set({ code: res.code, playerId: res.playerId });
     history.replaceState(null, '', `?room=${res.code}`);
+    $('#inviteCard').hidden = true;
   }
 
   function showLobby() {
@@ -191,7 +253,7 @@
   socket.on('connect', () => {
     $('#netState').classList.remove('show');
     const s = session.get();
-    if (!s) return;
+    if (!s) return handleInvite();
     socket.emit('join', { code: s.code, playerId: s.playerId, name: pref.get('name') }, (res) => {
       if (!res?.ok) {
         session.clear();
@@ -252,7 +314,8 @@
     if (a === 'invite') return copyInvite();
     if (a === 'exit') return $('#leaveBtn').click();
     if (a === 'lock') SFX.lock(); else SFX.click();
-    act(a, { level: b.dataset.level, id: b.dataset.id });
+    const amount = b.dataset.amount === 'allin' ? 'allin' : b.dataset.amount ? Number(b.dataset.amount) : undefined;
+    act(a, { level: b.dataset.level, id: b.dataset.id, amount });
   }
   // Bot "remove" buttons live inside opponent seats.
   $('#opps').addEventListener('click', (e) => {
@@ -279,9 +342,12 @@
     const inResult = S.phase === 'showdown' || S.phase === 'gameover';
     const hlCards = new Set();
     if (inResult && S.result) {
-      for (const h of S.result.hands) if (S.result.winners.includes(h.id)) h.best.forEach((c) => hlCards.add(c));
+      for (const h of S.result.hands) if (S.result.winners.includes(h.id)) (h.best || []).forEach((c) => hlCards.add(c));
     }
     const ctx = { me, opp, opps, inResult, hlCards };
+    const indian = S.game === 'indian';
+    $('#room').classList.toggle('game-indian', indian);
+    if (indian) renderIndianCenter();
 
     $('#roomCode').textContent = S.code;
     $('#roundInfo').textContent = S.round ? `${S.round}/${S.maxRounds}` : '-';
@@ -290,9 +356,11 @@
 
     renderOpps(ctx);
     renderSeat($('#seatMe'), me, true, ctx);
-    renderGrid(ctx);
-    runShuffle();
-    renderBoard(ctx);
+    if (!indian) {
+      renderGrid(ctx);
+      runShuffle();
+      renderBoard(ctx);
+    }
     renderStatus(ctx);
     renderActions(ctx);
     renderOverlay(ctx);
@@ -333,7 +401,9 @@
     const ph = S.phase;
     const hand = inResult && S.result ? S.result.hands.find((h) => h.id === p.id) : null;
     const isWinner = hand && S.result.winners.includes(p.id);
-    el.className = `seat ${isMe ? 'me' : 'opp'}${isWinner ? ' winner' : ''}${p.out ? ' out' : ''}`;
+    if (S.game === 'indian') return renderIndianSeat(el, p, isMe, hand, isWinner);
+    const turn = ph === 'bet' && S.turn === p.id;
+    el.className = `seat ${isMe ? 'me' : 'opp'}${isWinner ? ' winner' : ''}${p.out ? ' out' : ''}${p.folded ? ' folded' : ''}${turn ? ' turn' : ''}`;
 
     let badge = '';
     if (p.out && ph !== 'lobby' && ph !== 'gameover') badge = `<span class="badge warn">${t('badge.out')}</span>`;
@@ -341,6 +411,10 @@
     else if (ph === 'lobby' || ph === 'gameover') badge = p.ready ? `<span class="badge ok">${t('badge.ready')}</span>` : `<span class="badge">${t('badge.wait')}</span>`;
     else if (ph === 'memorize') badge = p.memorized ? `<span class="badge ok">${t('badge.memorized')}</span>` : `<span class="badge">${t('badge.memorizing')}</span>`;
     else if (ph === 'pick') badge = p.locked ? `<span class="badge ok">${t('badge.locked')}</span>` : `<span class="badge">${t('badge.picking', { n: p.pickCount })}</span>`;
+    else if (ph === 'bet') {
+      if (turn) badge = `<span class="badge think dots">${t('ip.thinking')}</span>`;
+      else if (p.lastAction) badge = `<span class="badge ${p.folded ? 'warn' : 'ok'}">${actionLabel(p.lastAction)}</span>`;
+    } else if (hand?.folded) badge = `<span class="badge warn">${t('ip.fold')}</span>`;
     else if (hand) {
       badge = `<span class="badge hand">${esc(I18N.hand(hand.score))}</span>`;
       if (S.game === 'nut') {
@@ -355,9 +429,11 @@
     let delta = '';
     if (ph === 'showdown' && S.result) {
       const won = S.result.winners.includes(p.id);
-      const net = won ? S.result.share - S.result.ante : -S.result.ante;
+      const net = (won ? S.result.share : 0) - S.result.ante - (hand?.bet || 0);
       if (net) delta = `<span class="delta ${net > 0 ? 'plus' : 'minus'}">${net > 0 ? '+' : ''}${fmt(net)}</span>`;
     }
+    const betChip = ph === 'bet' && p.bet ? `<span class="bet-chip"><span class="chip-icon"></span>${fmt(p.bet)}</span>` : '';
+    const dealer = S.betting && S.dealerId === p.id && ph !== 'lobby' && ph !== 'gameover' ? `<span class="dealer-btn" title="${t('ip.dealer')}">D</span>` : '';
 
     let hole = '';
     for (let k = 0; k < 2; k++) {
@@ -375,14 +451,104 @@
     }
 
     setHTML(el, `
-      ${removeBtn}
+      ${removeBtn}${dealer}
       <div class="avatar${p.connected ? '' : ' off'}${p.bot ? ' bot' : ''}" style="background:${colorFor(p.id)}">${p.bot ? botFace() : esc(p.name[0] || '?')}</div>
       <div class="who">
         <div class="name">${esc(p.name)}${isMe ? `<em>${t('me')}</em>` : ''}${botTag}</div>
         <div class="chips"><span class="chip-icon"></span>${fmt(p.chips)} ${delta}</div>
         ${badge}
       </div>
+      ${betChip}
       <div class="hole">${hole}</div>`);
+  }
+
+  // ---------------------------------------------------------- Indian Poker
+  const cardValue = (code) => (code ? (code[0] === 'T' ? 10 : Number(code[0])) : 0);
+
+  function actionLabel(a) {
+    if (!a) return '';
+    if (a.kind === 'check') return t('ip.check');
+    if (a.kind === 'call') return t('ip.callN', { n: fmt(a.amount) });
+    if (a.kind === 'raise') return t('ip.raiseTo', { n: fmt(a.amount) });
+    if (a.kind === 'allin') return t('ip.allin');
+    if (a.kind === 'fold') return t('ip.fold');
+    return '';
+  }
+
+  function renderIndianSeat(el, p, isMe, hand, isWinner) {
+    const ph = S.phase;
+    const turn = ph === 'bet' && S.turn === p.id;
+    el.className = `seat ${isMe ? 'me' : 'opp'} indian${isWinner ? ' winner' : ''}${p.out ? ' out' : ''}${p.folded ? ' folded' : ''}${turn ? ' turn' : ''}`;
+
+    let badge = '';
+    if (p.out && ph !== 'lobby' && ph !== 'gameover') badge = `<span class="badge warn">${t('badge.out')}</span>`;
+    else if (!p.connected) badge = `<span class="badge warn">${t('badge.off')}</span>`;
+    else if (ph === 'lobby' || ph === 'gameover') badge = p.ready ? `<span class="badge ok">${t('badge.ready')}</span>` : `<span class="badge">${t('badge.wait')}</span>`;
+    else if (ph === 'bet') {
+      if (turn) badge = `<span class="badge think dots">${t('ip.thinking')}</span>`;
+      else if (p.lastAction) badge = `<span class="badge ${p.folded ? 'warn' : 'ok'}">${actionLabel(p.lastAction)}</span>`;
+    } else if (hand) {
+      badge = `<span class="badge hand">${hand.folded ? t('ip.fold') : t('ip.value', { n: hand.value })}</span>`;
+      if (hand.penalty) badge += `<span class="badge warn">${t('ip.penalty', { n: hand.penalty })}</span>`;
+    }
+
+    let delta = '';
+    if (ph === 'showdown' && hand) {
+      const net = (isWinner ? S.result.share : 0) - S.result.ante - hand.bet - hand.penalty;
+      if (net) delta = `<span class="delta ${net > 0 ? 'plus' : 'minus'}">${net > 0 ? '+' : ''}${fmt(net)}</span>`;
+    }
+    const betChip = ph === 'bet' && p.bet ? `<span class="bet-chip"><span class="chip-icon"></span>${fmt(p.bet)}</span>` : '';
+    const dealer = S.dealerId === p.id && ph !== 'lobby' ? `<span class="dealer-btn" title="${t('ip.dealer')}">D</span>` : '';
+
+    // The forehead card: everyone else's is visible, your own stays a "?" until the reveal.
+    let card = '<div class="slot"></div>';
+    if (p.card) card = cardHTML(p.card, '', { cls: `${ph === 'showdown' && isMe ? 'pop ' : ''}${isWinner ? 'hl' : ''}` });
+    else if (p.hasCard) card = cardHTML(null, '?', { down: true, cls: isMe ? 'mine-hidden' : '' });
+
+    const botTag = p.bot ? `<span class="bot-tag">BOT·${t(`lvl.${p.bot}`)}</span>` : '';
+    const removeBtn = p.bot && ph === 'lobby' ? `<button class="seat-x" data-act="removeBot" data-id="${p.id}" aria-label="${t('bot.remove')}" title="${t('bot.remove')}">×</button>` : '';
+    setHTML(el, `
+      ${removeBtn}${dealer}
+      <div class="avatar${p.connected ? '' : ' off'}${p.bot ? ' bot' : ''}" style="background:${colorFor(p.id)}">${p.bot ? botFace() : esc(p.name[0] || '?')}</div>
+      <div class="who">
+        <div class="name">${esc(p.name)}${isMe ? `<em>${t('me')}</em>` : ''}${botTag}</div>
+        <div class="chips"><span class="chip-icon"></span>${fmt(p.chips)} ${delta}</div>
+        ${badge}
+      </div>
+      ${betChip}
+      <div class="hole forehead">${card}</div>`);
+  }
+
+  function renderIndianCenter() {
+    const box = $('#indianCenter');
+    if (S.phase === 'lobby') {
+      setHTML(box, `<div class="ip-rules">${t('ip.lobbyRules', { n: S.tenPenalty || 100 })}</div>`);
+      return;
+    }
+    const fresh = S.reshuffledAt === S.round && S.phase === 'bet';
+    const discards = (S.discards || []).map((c) => `<span class="mini-v ${'h'.includes(c[1]) ? 'red' : ''}">${cardValue(c)}</span>`).join('');
+    setHTML(box, `
+      <div class="ip-stats">
+        <span><em>${t('ip.toBeat')}</em><b>${fmt(S.currentBet || 0)}</b></span>
+        <span><em>${t('ip.deck')}</em><b>${S.deckLeft ?? '-'}</b>${fresh ? `<i class="ip-new">${t('ip.reshuffled')}</i>` : ''}</span>
+      </div>
+      <div class="ip-discards">
+        <em>${t('ip.discards')}</em>
+        <div class="mini-row">${discards || `<span class="none">${t('ip.noDiscards')}</span>`}</div>
+      </div>`);
+  }
+
+  function indianReason() {
+    const r = S.result;
+    if (!r) return '';
+    const mine = r.hands.find((h) => h.id === S.me);
+    const nameOf = (id) => S.players.find((p) => p.id === id)?.name || '';
+    if (r.uncontested) {
+      return r.winners[0] === S.me ? t('ip.whyAllFold') : t('ip.whyOthersWin', { name: nameOf(r.winners[0]) });
+    }
+    if (!mine) return '';
+    if (r.winners.length > 1) return t('ip.whyTie', { n: r.hands.find((h) => h.id === r.winners[0]).value });
+    return t('ip.whyMine', { n: mine.value });
   }
 
   function renderGrid({ me, opps, inResult, hlCards }) {
@@ -548,10 +714,13 @@
   // One line explaining a close result: speed tie-break (Nut Race) or kicker.
   function outcomeReason() {
     const r = S.result;
-    const mine = r?.hands.find((h) => h.id === S.me);
+    if (!r) return '';
+    const nameOf = (id) => S.players.find((p) => p.id === id)?.name || '';
+    if (r.uncontested) return r.winners[0] === S.me ? t('ip.whyAllFold') : t('ip.whyOthersWin', { name: nameOf(r.winners[0]) });
+    const mine = r.hands.find((h) => h.id === S.me);
+    if (mine?.folded) return t('why.folded');
     if (!mine || r.winners.length > 1) return '';
     const handName = I18N.hand(mine.score);
-    const nameOf = (id) => S.players.find((p) => p.id === id)?.name || '';
     if (!r.winners.includes(S.me)) {
       const w = r.hands.find((h) => h.id === r.winners[0]);
       if (cmpScore(mine.score, w.score) === 0) {
@@ -560,7 +729,7 @@
       }
       return I18N.hand(w.score) === handName ? t('why.kicker', { hand: handName }) : '';
     }
-    const others = r.hands.filter((h) => h.id !== S.me);
+    const others = r.hands.filter((h) => h.id !== S.me && !h.folded);
     const sameHand = others.filter((h) => cmpScore(h.score, mine.score) === 0);
     if (sameHand.length) {
       const times = sameHand.map((h) => h.lockedAt).filter((x) => x != null);
@@ -569,7 +738,159 @@
     return others.some((h) => I18N.hand(h.score) === handName) ? t('why.kickerWin', { hand: handName }) : '';
   }
 
-  function renderStatus({ me, opp }) {
+  function renderStatus(ctx) {
+    if (S.game === 'indian') return renderIndianStatus(ctx);
+    renderGridStatus(ctx);
+  }
+
+  function renderIndianStatus({ me, opp }) {
+    const ph = S.phase;
+    const turnP = S.players.find((p) => p.id === S.turn);
+    const myTurn = ph === 'bet' && S.turn === S.me;
+    const label = {
+      lobby: opp ? t('ph.lobbyReady') : t('ph.lobbyWait'),
+      bet: myTurn ? t('ip.yourTurn') : t('ip.turnOf', { name: turnP?.name || '' }),
+      showdown: t('ph.showdown'),
+      gameover: t('ph.gameover'),
+    }[ph] || '';
+    const sub = {
+      lobby: [t('game.indian'), t('sub.count', { n: S.players.length, max: S.maxPlayers }), opp ? t('sub.lobbyOpp') : t('sub.lobbyCode', { code: S.code }), t('ip.turnTime', { p: Math.round(S.durations.bet / 1000) })].join(' · '),
+      bet: myTurn && S.toCall ? t('ip.toCall', { n: fmt(S.toCall) }) : t('ip.betHint'),
+      showdown: indianReason(),
+    }[ph] || '';
+    $('#phaseLabel').textContent = label;
+    $('#phaseSub').textContent = sub;
+    showBanner(() => {
+      const mine = S.result.hands.find((h) => h.id === S.me);
+      return mine ? t('ip.myCard', { n: mine.value }) : '';
+    }, indianReason);
+  }
+
+  // ---------------------------------------------------------- winner spotlight
+  // Once per showdown: a full-screen moment naming who won and with what.
+  const CROWN = '<svg viewBox="0 0 64 44" aria-hidden="true"><defs><linearGradient id="spG" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#fff2b8"/><stop offset=".5" stop-color="#f5c451"/><stop offset="1" stop-color="#a06c17"/></linearGradient></defs><path d="M4 14l14 10L32 4l14 20 14-10-6 26H10z" fill="url(#spG)" stroke="#6b450c" stroke-width="2" stroke-linejoin="round"/><circle cx="32" cy="4" r="4" fill="#e3283a"/><circle cx="4" cy="14" r="3.5" fill="#2f7bff"/><circle cx="60" cy="14" r="3.5" fill="#2f7bff"/></svg>';
+
+  function showBanner(detail, reason) {
+    const ph = S.phase;
+    if (ph === 'showdown' && P?.phase !== 'showdown' && S.result) {
+      clearTimeout(bannerTimer);
+      // Let the table reveal play first, then take the stage.
+      const delay = S.game === 'indian' ? 700 : S.game === 'nut' ? 500 : 1300;
+      const d = detail();
+      const why = reason();
+      bannerTimer = setTimeout(() => openSpotlight(d, why), delay);
+    } else if (ph !== 'showdown') {
+      clearTimeout(bannerTimer);
+      closeSpotlight(true);
+    }
+  }
+
+  function openSpotlight(myDetail, why) {
+    const r = S.result;
+    if (!r) return;
+    const el = $('#spotlight');
+    const winners = r.winners.map((id) => S.players.find((p) => p.id === id) || { id, name: '?' });
+    const iWon = r.winners.includes(S.me);
+    const split = winners.length > 1;
+    const wHand = r.hands.find((h) => h.id === r.winners[0]);
+    const indian = S.game === 'indian';
+    const handName = r.uncontested ? t('sp.allFold')
+      : indian ? t('sp.indianWin', { n: wHand.value }) : I18N.hand(wHand.score);
+    const title = split ? t('sp.split') : iWon ? t('sp.youWin') : t('sp.wins', { name: winners[0].name });
+
+    let cards = '';
+    if (indian) {
+      cards = winners.map((w, i) => cardHTML(r.hands.find((h) => h.id === w.id).card, '', { cls: 'sp-card big', style: `--i:${i}` })).join('');
+    } else if (!r.uncontested) {
+      const own = new Set(wHand.cards);
+      cards = wHand.best.map((c, i) => cardHTML(c, '', { cls: `sp-card${own.has(c) ? ' own' : ''}`, style: `--i:${i}` })).join('');
+    }
+    const avatars = winners.map((w) => `<div class="sp-avatar" style="background:${colorFor(w.id)}">${w.bot ? botFace() : esc(w.name[0] || '?')}</div>`).join('');
+    const mine = !iWon && myDetail ? `<div class="sp-mine">${t('sp.yours')}: <b>${esc(myDetail)}</b></div>` : '';
+
+    el.className = `spotlight show${iWon ? ' me' : ''}${split ? ' split' : ''}`;
+    el.innerHTML = `
+      <canvas class="sp-confetti"></canvas>
+      <div class="sp-rays"></div>
+      <div class="sp-box">
+        <div class="sp-crown">${CROWN}</div>
+        <div class="sp-avatars">${avatars}</div>
+        <div class="sp-title">${esc(title)}</div>
+        <div class="sp-hand">${esc(handName)}</div>
+        ${cards ? `<div class="sp-cards">${cards}</div>` : ''}
+        <div class="sp-pot"><span class="chip-icon"></span><span>+</span><b class="sp-count">0</b></div>
+        ${why ? `<div class="sp-why">${esc(why)}</div>` : ''}
+        ${mine}
+        <div class="sp-tap">${t('sp.tap')}</div>
+      </div>`;
+    countUp(el.querySelector('.sp-count'), r.share, 1200);
+    confetti(el.querySelector('.sp-confetti'), iWon ? 170 : 90);
+    SFX.spotlight();
+    setTimeout(() => (split ? SFX.split() : iWon ? SFX.win() : SFX.lose()), 650);
+    clearTimeout(openSpotlight._t);
+    openSpotlight._t = setTimeout(() => closeSpotlight(), indian ? 3800 : 4600);
+  }
+
+  function closeSpotlight(instant) {
+    const el = $('#spotlight');
+    if (!el.classList.contains('show')) return;
+    clearTimeout(openSpotlight._t);
+    el.classList.add('out');
+    setTimeout(() => { el.className = 'spotlight'; el.innerHTML = ''; }, instant ? 0 : 450);
+  }
+  $('#spotlight').addEventListener('click', () => closeSpotlight());
+
+  function countUp(node, target, ms) {
+    if (!node) return;
+    const t0 = Date.now();
+    const iv = setInterval(() => {
+      const k = Math.min(1, (Date.now() - t0) / ms);
+      node.textContent = fmt(Math.round(target * (1 - Math.pow(1 - k, 3))));
+      if (k >= 1) clearInterval(iv);
+    }, 30);
+  }
+
+  function confetti(cv, count) {
+    if (!cv || matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+    const g = cv.getContext('2d');
+    const dpr = Math.min(devicePixelRatio || 1, 2);
+    const W = (cv.width = innerWidth * dpr);
+    const H = (cv.height = innerHeight * dpr);
+    const colors = ['#f5c451', '#fff0b0', '#e3283a', '#3ea0ff', '#7dffb0', '#ffffff'];
+    const parts = Array.from({ length: count }, () => ({
+      x: W / 2 + (Math.random() - 0.5) * W * 0.2,
+      y: H * 0.42,
+      vx: (Math.random() - 0.5) * 22 * dpr,
+      vy: (-Math.random() * 20 - 6) * dpr,
+      s: (Math.random() * 6 + 4) * dpr,
+      r: Math.random() * Math.PI,
+      vr: (Math.random() - 0.5) * 0.3,
+      c: colors[(Math.random() * colors.length) | 0],
+    }));
+    const t0 = Date.now();
+    (function frame() {
+      if (!cv.isConnected) return;
+      const age = Date.now() - t0;
+      g.clearRect(0, 0, W, H);
+      for (const p of parts) {
+        p.vy += 0.55 * dpr;
+        p.vx *= 0.985;
+        p.x += p.vx;
+        p.y += p.vy;
+        p.r += p.vr;
+        g.save();
+        g.globalAlpha = Math.max(0, 1 - age / 3600);
+        g.translate(p.x, p.y);
+        g.rotate(p.r);
+        g.fillStyle = p.c;
+        g.fillRect(-p.s / 2, -p.s / 4, p.s, p.s / 2);
+        g.restore();
+      }
+      if (age < 3600) requestAnimationFrame(frame);
+    })();
+  }
+
+  function renderGridStatus({ me, opp }) {
     const ph = S.phase;
     const nut = S.game === 'nut';
     const labels = {
@@ -578,6 +899,7 @@
       reveal: t('ph.reveal'),
       shuffle: t('ph.shuffle'),
       pick: nut ? t('ph.nutPick') : t('ph.pick'),
+      bet: S.turn === S.me ? t('bet.yourTurn') : t('ip.turnOf', { name: S.players.find((p) => p.id === S.turn)?.name || '' }),
       showdown: t('ph.showdown'),
       gameover: t('ph.gameover'),
     };
@@ -591,7 +913,9 @@
         opp ? t('sub.lobbyOpp') : t('sub.lobbyCode', { code: S.code }),
         times,
         S.settings?.swaps ? t('sub.swaps', { n: S.settings.swaps }) : '',
+        S.betting ? t('bet.on') : '',
       ].filter(Boolean).join(' · '),
+      bet: S.turn === S.me && S.toCall ? t('ip.toCall', { n: fmt(S.toCall) }) : t('bet.hint'),
       memorize: t('sub.memorize', { m: memSec }),
       reveal: S.game === 'shuffle' ? t('sub.revealShuffle') : t('sub.reveal'),
       shuffle: t('sub.shuffle'),
@@ -601,28 +925,7 @@
     };
     $('#phaseLabel').textContent = labels[ph] || '';
     $('#phaseSub').textContent = subs[ph] || '';
-
-    // Result banner
-    const banner = $('#banner');
-    if (ph === 'showdown' && P?.phase !== 'showdown' && S.result) {
-      const won = S.result.winners.includes(S.me);
-      const split = S.result.winners.length > 1;
-      const myHand = S.result.hands.find((h) => h.id === S.me);
-      const kind = split ? 'split' : won ? 'win' : 'lose';
-      const title = split ? 'SPLIT' : won ? 'WIN!' : 'LOSE';
-      banner.className = `banner ${kind}`;
-      const why = outcomeReason();
-      banner.innerHTML = `${title}<small>${esc(I18N.hand(myHand?.score))}</small>${why ? `<small class="why">${esc(why)}</small>` : ''}`;
-      clearTimeout(bannerTimer);
-      bannerTimer = setTimeout(() => {
-        banner.classList.add('show');
-        if (split) SFX.split(); else if (won) SFX.win(); else SFX.lose();
-        bannerTimer = setTimeout(() => banner.classList.remove('show'), 2400);
-      }, 1700);
-    } else if (ph !== 'showdown') {
-      clearTimeout(bannerTimer);
-      banner.classList.remove('show');
-    }
+    showBanner(() => I18N.hand(S.result.hands.find((h) => h.id === S.me)?.score), outcomeReason);
   }
 
   function renderActions({ me, opp }) {
@@ -641,6 +944,8 @@
           ${full ? '' : `<button class="btn ghost" data-act="invite">${t('invite.copy')}</button>`}
           <button class="btn ${me.ready ? 'ghost' : 'gold'} big" data-act="ready" ${opp ? '' : 'disabled'}>${me.ready ? t('act.unready') : t('act.ready')}</button>
         </div>${bots}`;
+    } else if (ph === 'bet') {
+      html = betActions(me);
     } else if (ph === 'memorize') {
       html = me.memorized
         ? `<span class="hint dots">${t('hint.oppMemorizing')}</span>`
@@ -661,6 +966,27 @@
         : `<button class="btn blue" data-act="next">${last ? t('act.final') : t('act.nextRound')}</button>`;
     }
     setHTML(bar, html);
+  }
+
+  function betActions(me) {
+    if (me.folded) return `<span class="hint">${t('ip.foldedWait')}</span>`;
+    if (S.turn !== S.me) {
+      const turnP = S.players.find((p) => p.id === S.turn);
+      return `<span class="hint dots">${t('ip.waitTurn', { name: turnP?.name || '' })}</span>`;
+    }
+    const toCall = S.toCall || 0;
+    const canRaise = S.raises < S.maxRaises && S.cap > S.currentBet && me.chips > toCall;
+    const raiseBtn = (step) => {
+      const target = Math.min(S.currentBet + step, S.cap);
+      return `<button class="btn ip-raise" data-act="raise" data-amount="${step}" ${canRaise ? '' : 'disabled'}>${t('ip.raiseBtn', { n: step })}<small>${t('ip.toN', { n: fmt(target) })}</small></button>`;
+    };
+    return `<div class="ip-actions">
+      <button class="btn ip-fold" data-act="fold">${t('ip.fold')}</button>
+      ${toCall ? `<button class="btn blue" data-act="call">${t('ip.callBtn', { n: fmt(Math.min(toCall, me.chips)) })}</button>`
+        : `<button class="btn blue" data-act="check">${t('ip.check')}</button>`}
+      ${(S.raiseSteps || [50, 100]).map(raiseBtn).join('')}
+      <button class="btn ip-allin" data-act="raise" data-amount="allin" ${canRaise ? '' : 'disabled'}>${t('ip.allin')}<small>${t('ip.toN', { n: fmt(S.cap) })}</small></button>
+    </div>`;
   }
 
   function renderOverlay({ me, opp }) {
@@ -698,6 +1024,17 @@
   }
 
   function phaseEffects() {
+    if (S.phase === 'bet') {
+      if (S.turn === S.me && (P?.turn !== S.me || P?.phase !== 'bet')) SFX.select();
+      // Chip sound whenever someone puts money in.
+      if (P?.phase === 'bet' && P?.dealId === S.dealId && S.pot > P.pot) SFX.chips();
+    }
+    if (S.game === 'indian') {
+      if (S.phase === 'bet' && P?.dealId !== S.dealId) SFX.deal();
+      if (S.phase === 'showdown' && P?.phase !== 'showdown') { SFX.flip(0.1); SFX.flipWave(S.players.length, 0.08, 0.2); }
+      if (S.phase === 'gameover' && P?.phase !== 'gameover' && S.final?.championId === S.me) SFX.fanfare();
+      return;
+    }
     if (P?.phase === S.phase && P?.dealId === S.dealId) return;
     switch (S.phase) {
       case 'memorize':
@@ -723,6 +1060,8 @@
   I18N.apply();
   I18N.onChange(() => {
     if ($('#setup').classList.contains('show')) renderSetup();
+    renderRooms();
+    renderInvite();
     if (S) render();
   });
 
@@ -743,7 +1082,7 @@
     timerEl.classList.remove('hidden');
     timerNum.textContent = sec;
     timerBar.style.strokeDashoffset = String(CIRC * (1 - left / total));
-    const urgent = (S.phase === 'memorize' || S.phase === 'pick') && sec <= 5;
+    const urgent = (S.phase === 'memorize' || S.phase === 'pick' || (S.phase === 'bet' && S.turn === S.me)) && sec <= 5;
     timerEl.classList.toggle('urgent', urgent);
     if (urgent && sec > 0 && sec !== lastTick) SFX.tick();
     lastTick = sec;

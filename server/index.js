@@ -8,6 +8,7 @@ const GAMES = {
   memory: require('./games/memoryPoker'),
   shuffle: require('./games/shuffleMemory'),
   nut: require('./games/nutRace'),
+  indian: require('./games/indianPoker'),
 };
 const Bots = require('./bots');
 
@@ -45,7 +46,7 @@ function createRoom(gameId, settings) {
   const Game = GAMES[gameId];
   if (!Game) return null;
   const room = { code: genCode(), gameId, players: [], chat: [], chatSeq: 0, cleanupTimer: null };
-  room.broadcast = () => broadcast(room);
+  room.broadcast = () => { broadcast(room); announceRooms(); };
   room.postChat = (msg) => postChat(room, msg);
   room.game = new Game(room, settings && typeof settings === 'object' ? settings : {});
   rooms.set(room.code, room);
@@ -84,6 +85,41 @@ function destroyRoom(room) {
   clearTimeout(room.cleanupTimer);
   room.game.dispose();
   rooms.delete(room.code);
+  announceRooms();
+}
+
+// ---- lobby room list ------------------------------------------------------
+// Sockets that aren't seated in a room sit in the "lobby" channel and get a
+// live list of rooms (debounced so busy games don't spam it).
+function roomSummary(room) {
+  const humans = room.players.filter((p) => !p.bot);
+  return {
+    code: room.code,
+    gameId: room.gameId,
+    host: (humans[0] || room.players[0])?.name || '',
+    players: room.players.length,
+    bots: room.players.length - humans.length,
+    max: room.game.maxPlayers,
+    playing: room.game.phase !== 'lobby',
+    joinable: room.game.canJoin(),
+  };
+}
+
+function roomList() {
+  return [...rooms.values()]
+    .filter((r) => r.players.some((p) => !p.bot && p.connected))
+    .map(roomSummary)
+    .sort((a, b) => Number(b.joinable) - Number(a.joinable))
+    .slice(0, 30);
+}
+
+let announceTimer = null;
+function announceRooms() {
+  if (announceTimer) return;
+  announceTimer = setTimeout(() => {
+    announceTimer = null;
+    io.to('lobby').emit('rooms', roomList());
+  }, 300);
 }
 
 function addBot(room, level) {
@@ -110,6 +146,15 @@ io.on('connection', (socket) => {
 
   const reply = (ack, payload) => typeof ack === 'function' && ack(payload);
 
+  socket.join('lobby');
+  socket.emit('rooms', roomList());
+
+  // Invite links ask what they're joining before the player commits.
+  socket.on('roomInfo', (code, ack) => {
+    const room = rooms.get(String(code || '').toUpperCase());
+    reply(ack, room ? { ok: true, ...roomSummary(room) } : { ok: false, code: 'srv.notFound' });
+  });
+
   function attach(room, player) {
     if (ctx && ctx.player !== player) detach();
     if (player.socketId && player.socketId !== socket.id) {
@@ -118,6 +163,7 @@ io.on('connection', (socket) => {
     player.socketId = socket.id;
     player.connected = true;
     ctx = { room, player };
+    socket.leave('lobby');
     clearTimeout(room.cleanupTimer);
     socket.emit('chatHistory', room.chat);
     room.broadcast();
@@ -127,6 +173,8 @@ io.on('connection', (socket) => {
     if (!ctx) return;
     const { room, player } = ctx;
     ctx = null;
+    socket.join('lobby');
+    socket.emit('rooms', roomList());
     room.players = room.players.filter((p) => p !== player);
     room.game.onLeave(player.id, player.name);
     if (!room.players.some((p) => !p.bot)) return destroyRoom(room);

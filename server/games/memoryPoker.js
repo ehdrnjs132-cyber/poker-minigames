@@ -9,6 +9,7 @@ const CFG = {
   memorizeMs: 30000,
   revealMs: 2500,
   pickMs: 20000,
+  turnMs: 15000,
   showdownMs: 9000,
   startChips: 1000,
   maxRounds: 10,
@@ -16,8 +17,11 @@ const CFG = {
   minPlayers: 2,
   maxPlayers: 6,
   defaultPlayers: 4,
+  maxRaises: 4,
+  raiseSteps: [50, 100],
 };
-const ACTIVE_PHASES = ['memorize', 'reveal', 'shuffle', 'pick', 'showdown'];
+const ACTIVE_PHASES = ['memorize', 'reveal', 'shuffle', 'pick', 'bet', 'showdown'];
+const BET_ACTIONS = ['check', 'call', 'raise', 'fold'];
 
 const clampInt = (v, def, min, max) => {
   const n = Math.round(Number(v));
@@ -28,11 +32,13 @@ const clampInt = (v, def, min, max) => {
  * 기억 포커 (Memory Poker)
  * 16 cards are shown face up, then flipped face down (players remember
  * positions only). 5 community cards are dealt; each player secretly picks
- * 2 positions (several players may pick the same card). Best 5 of 7 wins.
- * 2–6 players; anyone who runs out of chips is out for the rest of the game.
+ * 2 positions (several players may pick the same card). Optionally a betting
+ * round follows, where players bet on how well they remembered. Best 5 of 7
+ * among players who didn't fold wins. 2–6 players; busted players are out.
  *
- * This is also the base class for the other card-grid games
- * (shuffleMemory.js, nutRace.js), which override the hooks below.
+ * This is also the base class for the other games (shuffleMemory.js,
+ * nutRace.js, indianPoker.js), which override the hooks below. It holds the
+ * shared lobby / ready / elimination / bot plumbing and the betting engine.
  * The server is authoritative: grid cards are only sent to clients in the
  * phases listed by gridPhases().
  */
@@ -45,6 +51,8 @@ class MemoryPoker {
       players: clampInt(raw.players, CFG.defaultPlayers, CFG.minPlayers, CFG.maxPlayers),
       memorizeSec: clampInt(raw.memorizeSec, CFG.memorizeMs / 1000, 5, 90),
       pickSec: clampInt(raw.pickSec, CFG.pickMs / 1000, 5, 60),
+      betting: raw.betting !== 'off' && raw.betting !== false,
+      turnSec: clampInt(raw.turnSec, CFG.turnMs / 1000, 10, 60),
     };
   }
 
@@ -52,8 +60,9 @@ class MemoryPoker {
     this.room = room;
     this.settings = this.constructor.normalizeSettings(settings);
     this.maxPlayers = this.settings.players;
-    this.memorizeMs = this.settings.memorizeSec * 1000;
-    this.pickMs = this.settings.pickSec * 1000;
+    this.memorizeMs = (this.settings.memorizeSec || 0) * 1000;
+    this.pickMs = (this.settings.pickSec || 0) * 1000;
+    this.turnMs = (this.settings.turnSec || CFG.turnMs / 1000) * 1000;
     this.ps = new Map();
     this.timer = null;
     this.botTimers = [];
@@ -87,12 +96,16 @@ class MemoryPoker {
     this.startPick();
   }
 
+  bettingOn() {
+    return !!this.settings.betting;
+  }
+
   gridPhases() {
     return ['memorize', 'showdown', 'gameover'];
   }
 
   boardPhases() {
-    return ['reveal', 'pick', 'showdown', 'gameover'];
+    return ['reveal', 'pick', 'bet', 'showdown', 'gameover'];
   }
 
   // Default: best hand wins, equal hands split.
@@ -110,8 +123,23 @@ class MemoryPoker {
     return {};
   }
 
+  // Called when a player folds (Indian Poker charges a penalty here).
+  onFold(/* s */) {}
+
   botPlan(player) {
     return Bots.memoryPlan(this.grid, this.board, player.bot, { swaps: this.swapCount || 0, maxDelay: this.pickMs - 1200 });
+  }
+
+  // Chance (0..1) that this bot beats everyone still in the hand.
+  botWinChance(player) {
+    const s = this.ps.get(player.id);
+    const opponents = Math.max(1, this.inHand().length - 1);
+    return Math.pow(s.botConfidence ?? 0.35, opponents);
+  }
+
+  // Extra cost a bot attaches to folding (Indian Poker: maybe folding a 10).
+  botFoldCost(/* player */) {
+    return 0;
   }
 
   // ---- lifecycle -------------------------------------------------------
@@ -128,6 +156,10 @@ class MemoryPoker {
     this.final = null;
     this.deadline = null;
     this.notice = notice;
+    this.dealerIdx = -1;
+    this.turnId = null;
+    this.currentBet = 0;
+    this.raises = 0;
     this.dealId++;
     for (const p of this.players) {
       const s = this.ps.get(p.id);
@@ -146,6 +178,12 @@ class MemoryPoker {
     s.lockedAt = null;
     s.memorized = false;
     s.next = false;
+    s.bet = 0;
+    s.folded = false;
+    s.acted = false;
+    s.lastAction = null;
+    s.penalty = 0;
+    s.botConfidence = null;
   }
 
   onJoin(player) {
@@ -157,6 +195,7 @@ class MemoryPoker {
 
   // Called after the player has been removed from room.players.
   onLeave(playerId, name) {
+    const wasTurn = this.turnId === playerId;
     this.ps.delete(playerId);
     const inGame = ACTIVE_PHASES.includes(this.phase);
     if (inGame || this.phase === 'gameover') {
@@ -164,6 +203,7 @@ class MemoryPoker {
       if (this.players.length < CFG.minPlayers || humans === 0) return this.toLobby({ code: 'srv.oppLeft', name, at: Date.now() });
       this.notice = { code: 'sys.left', name, at: Date.now() };
       if (inGame && this.activePlayers().length < CFG.minPlayers) return this.finish();
+      if (this.phase === 'bet' && (wasTurn || this.inHand().length <= 1)) return this.advance();
       if (inGame) this.checkProgress();
     } else {
       // Someone left the waiting room: humans re-confirm before a surprise start.
@@ -201,7 +241,7 @@ class MemoryPoker {
   // Advance early when nobody is left to wait for. Returns true if advanced.
   checkProgress() {
     if (this.phase === 'memorize' && this.allActive((s) => s.memorized)) return this.startReveal(), true;
-    if (this.phase === 'pick' && this.allActive((s) => s.locked)) return this.showdown(), true;
+    if (this.phase === 'pick' && this.allActive((s) => s.locked)) return this.afterPick(), true;
     if (this.phase === 'showdown' && this.allActive((s) => s.next)) return this.afterShowdown(), true;
     return false;
   }
@@ -210,6 +250,152 @@ class MemoryPoker {
     const ready = this.players.length >= CFG.minPlayers && this.players.every((p) => this.ps.get(p.id).ready);
     if ((this.phase === 'lobby' || this.phase === 'gameover') && ready) return this.startGame(), true;
     return false;
+  }
+
+  // ---- betting engine (shared) -----------------------------------------
+  // One betting round: check / call / raise / fold, turn by turn.
+  // Bets are capped at the shortest stack still in the hand, so no side pots.
+
+  inHand() {
+    return this.activePlayers().filter((p) => !this.ps.get(p.id).folded);
+  }
+
+  cap() {
+    const live = this.inHand().map((p) => this.ps.get(p.id));
+    return live.length ? Math.min(...live.map((s) => s.chips + s.bet)) : 0;
+  }
+
+  canAct(p) {
+    const s = this.ps.get(p.id);
+    return !!s && !s.out && !s.folded && s.chips > 0;
+  }
+
+  nextIndex(from, pred) {
+    const n = this.players.length;
+    for (let k = 1; k <= n; k++) {
+      const i = (((from + k) % n) + n) % n;
+      const p = this.players[i];
+      if (this.ps.get(p.id) && !this.ps.get(p.id).out && pred(p)) return i;
+    }
+    return Math.max(0, from);
+  }
+
+  rotateDealer() {
+    this.dealerIdx = this.nextIndex(this.dealerIdx, () => true);
+  }
+
+  startBetting() {
+    this.currentBet = 0;
+    this.raises = 0;
+    for (const s of this.ps.values()) {
+      s.bet = 0;
+      s.acted = false;
+      s.lastAction = null;
+    }
+    // Everyone all-in already: nothing to bet.
+    if (!this.activePlayers().some((p) => this.canAct(p))) return this.betDone();
+    this.startTurn(this.players[this.nextIndex(this.dealerIdx, (p) => this.canAct(p))].id);
+  }
+
+  startTurn(id) {
+    this.turnId = id;
+    this.setPhase('bet', this.turnMs, () => this.onTurnTimeout());
+  }
+
+  onTurnTimeout() {
+    const s = this.ps.get(this.turnId);
+    if (!s) return this.advance();
+    this.applyBet(this.turnId, s.bet === this.currentBet ? { type: 'check' } : { type: 'fold' });
+  }
+
+  advance() {
+    const live = this.inHand();
+    if (live.length <= 1) return this.betDone();
+    const needs = (p) => {
+      const s = this.ps.get(p.id);
+      return this.canAct(p) && (!s.acted || s.bet < this.currentBet);
+    };
+    if (!live.some(needs)) return this.betDone();
+    const from = this.players.findIndex((p) => p.id === this.turnId);
+    this.startTurn(this.players[this.nextIndex(from, needs)].id);
+  }
+
+  betDone() {
+    this.turnId = null;
+    this.showdown();
+  }
+
+  applyBet(playerId, action) {
+    const s = this.ps.get(playerId);
+    if (this.phase !== 'bet' || playerId !== this.turnId || !s || s.folded || s.out) return false;
+    const toCall = this.currentBet - s.bet;
+    switch (action.type) {
+      case 'check':
+        if (toCall !== 0) return false;
+        s.lastAction = { kind: 'check' };
+        break;
+      case 'call': {
+        if (toCall <= 0) return false;
+        const pay = Math.min(toCall, s.chips);
+        s.chips -= pay;
+        s.bet += pay;
+        this.pot += pay;
+        s.lastAction = { kind: s.chips === 0 ? 'allin' : 'call', amount: pay };
+        break;
+      }
+      case 'raise': {
+        const cap = this.cap();
+        if (this.raises >= CFG.maxRaises || cap <= this.currentBet) return false;
+        const step = action.amount === 'allin' ? Infinity : Number(action.amount);
+        if (step !== Infinity && !CFG.raiseSteps.includes(step)) return false;
+        const target = Math.min(this.currentBet + step, cap);
+        const pay = target - s.bet;
+        if (pay <= 0 || pay > s.chips) return false;
+        s.chips -= pay;
+        s.bet = target;
+        this.pot += pay;
+        this.currentBet = target;
+        this.raises++;
+        for (const p of this.inHand()) if (p.id !== playerId) this.ps.get(p.id).acted = false;
+        s.lastAction = { kind: s.chips === 0 || target === cap ? 'allin' : 'raise', amount: target };
+        break;
+      }
+      case 'fold':
+        s.folded = true;
+        this.onFold(s);
+        s.lastAction = { kind: 'fold' };
+        break;
+      default:
+        return false;
+    }
+    s.acted = true;
+    this.advance();
+    return true;
+  }
+
+  // Shared bot betting brain: compare win chance with pot odds.
+  botBetDecision(p) {
+    const L = { easy: { noise: 0.3, bluff: 0.05 }, normal: { noise: 0.12, bluff: 0.1 }, hard: { noise: 0.04, bluff: 0.14 } }[p.bot]
+      || { noise: 0.12, bluff: 0.1 };
+    const s = this.ps.get(p.id);
+    let win = this.botWinChance(p);
+    win = Math.min(1, Math.max(0, win + (crypto.randomInt(2001) / 1000 - 1) * L.noise));
+    const toCall = this.currentBet - s.bet;
+    const canRaise = this.raises < CFG.maxRaises && this.cap() > this.currentBet && s.chips > toCall;
+    const roll = crypto.randomInt(1000) / 1000;
+    const raise = (amount) => ({ type: 'raise', amount });
+    if (toCall === 0) {
+      if (canRaise && (win > 0.72 || roll < L.bluff)) return raise(win > 0.9 && p.bot === 'hard' ? 'allin' : win > 0.82 ? 100 : 50);
+      return { type: 'check' };
+    }
+    const callEv = win * (this.pot + toCall) - toCall;
+    if (canRaise && win > 0.8 && roll < 0.6) return raise(win > 0.9 ? 100 : 50);
+    // Big calls (a large part of the stack) need real confidence, not just pot odds.
+    const big = toCall >= s.chips * 0.35;
+    const needed = big ? { easy: 0.4, normal: 0.55, hard: 0.6 }[p.bot] ?? 0.55 : 0;
+    if (win < needed && this.botFoldCost(p) < toCall * 0.5) return { type: 'fold' };
+    if (callEv > -this.botFoldCost(p) || roll < L.bluff / 2) return { type: 'call' };
+    return { type: 'fold' };
   }
 
   // ---- bots ------------------------------------------------------------
@@ -223,6 +409,15 @@ class MemoryPoker {
   }
 
   runBots() {
+    if (this.phase === 'bet') {
+      const p = this.players.find((x) => x.id === this.turnId);
+      if (p?.bot) {
+        this.botLater(Bots.rand([1200, 2800]), () => {
+          if (!this.applyBet(p.id, this.botBetDecision(p))) this.applyBet(p.id, { type: 'fold' });
+        });
+      }
+      return;
+    }
     for (const p of this.players) {
       if (!p.bot) continue;
       const s = this.ps.get(p.id);
@@ -240,6 +435,7 @@ class MemoryPoker {
             s.picks = plan.picks;
             s.locked = true;
             s.lockedAt = Date.now() - this.phaseStartedAt;
+            s.botConfidence = plan.confidence;
             if (!this.checkProgress()) this.changed();
           });
           break;
@@ -247,12 +443,12 @@ class MemoryPoker {
         case 'showdown': {
           const won = this.result?.winners.includes(p.id);
           if (crypto.randomInt(100) < 35) {
-            this.botLater(Bots.rand([1800, 3200]), () => this.room.postChat({
+            this.botLater(Bots.rand([2600, 4200]), () => this.room.postChat({
               kind: 'sticker', playerId: p.id, name: p.name,
               sticker: Bots.pickOne(won ? Bots.WIN_STICKERS : Bots.LOSE_STICKERS),
             }));
           }
-          this.botLater(Bots.rand([2500, 4000]), () => {
+          this.botLater(Bots.rand([4200, 5600]), () => {
             s.next = true;
             if (!this.checkProgress()) this.changed();
           });
@@ -269,6 +465,7 @@ class MemoryPoker {
   onAction(playerId, action) {
     const s = this.ps.get(playerId);
     if (!s || !action) return;
+    if (BET_ACTIONS.includes(action.type)) return void this.applyBet(playerId, action);
 
     switch (action.type) {
       case 'ready': {
@@ -323,6 +520,7 @@ class MemoryPoker {
     this.round = 0;
     this.final = null;
     this.notice = null;
+    this.dealerIdx = -1;
     this.nextRound();
   }
 
@@ -344,7 +542,10 @@ class MemoryPoker {
     this.grid = deck.slice(0, CFG.gridSize);
     this.board = deck.slice(CFG.gridSize, CFG.gridSize + 5);
     this.result = null;
+    this.currentBet = 0;
+    this.turnId = null;
     this.dealId++;
+    this.rotateDealer();
     this.startRound();
   }
 
@@ -353,13 +554,12 @@ class MemoryPoker {
   }
 
   startPick() {
-    this.setPhase('pick', this.pickMs, () => this.showdown());
+    this.setPhase('pick', this.pickMs, () => this.afterPick());
   }
 
-  showdown() {
-    const active = this.activePlayers();
-    // Anyone who didn't finish picking gets random cards (and no lock time).
-    for (const p of active) {
+  // Fill in random picks for anyone who didn't finish (no lock time for them).
+  autoPick(players) {
+    for (const p of players) {
       const s = this.ps.get(p.id);
       while (s.picks.length < CFG.picks) {
         const i = crypto.randomInt(CFG.gridSize);
@@ -367,15 +567,27 @@ class MemoryPoker {
       }
       s.locked = true;
     }
+  }
 
+  afterPick() {
+    this.autoPick(this.activePlayers());
+    if (this.bettingOn()) this.startBetting();
+    else this.showdown();
+  }
+
+  showdown() {
+    this.turnId = null;
+    const active = this.activePlayers();
+    this.autoPick(active);
     const hands = active.map((p) => {
       const s = this.ps.get(p.id);
       const cards = s.picks.map((i) => this.grid[i]);
       const bh = bestHand([...cards, ...this.board]);
-      return { id: p.id, picks: s.picks.slice(), cards, score: bh.score, best: bh.cards, lockedAt: s.lockedAt };
+      return { id: p.id, picks: s.picks.slice(), cards, score: bh.score, best: bh.cards, lockedAt: s.lockedAt, folded: s.folded, bet: s.bet };
     });
 
-    const winners = this.pickWinners(hands);
+    const live = hands.filter((h) => !h.folded);
+    const winners = live.length === 1 ? [live[0].id] : this.pickWinners(live);
     const share = Math.floor(this.pot / winners.length);
     let remainder = this.pot - share * winners.length;
     for (const id of winners) {
@@ -385,7 +597,10 @@ class MemoryPoker {
     }
 
     const willEnd = this.isGameOver();
-    this.result = { hands, winners, pot: this.pot, share, ante: this.ante, final: willEnd, ...this.extraResult(hands) };
+    this.result = {
+      hands, winners, pot: this.pot, share, ante: this.ante,
+      uncontested: live.length === 1 && hands.length > 1, final: willEnd, ...this.extraResult(hands),
+    };
     this.pot = 0;
     this.setPhase('showdown', CFG.showdownMs, () => this.afterShowdown());
   }
@@ -413,6 +628,26 @@ class MemoryPoker {
 
   // ---- view ------------------------------------------------------------
 
+  // Betting fields shared by every game's view.
+  betView(viewerId) {
+    const me = this.ps.get(viewerId);
+    return {
+      betting: this.bettingOn(),
+      turn: this.turnId,
+      currentBet: this.currentBet,
+      toCall: me ? Math.max(0, this.currentBet - me.bet) : 0,
+      cap: this.phase === 'bet' ? this.cap() : 0,
+      raises: this.raises,
+      maxRaises: CFG.maxRaises,
+      raiseSteps: CFG.raiseSteps,
+      dealerId: this.players[this.dealerIdx]?.id || null,
+    };
+  }
+
+  playerBetView(s) {
+    return { folded: s.folded, bet: s.bet, lastAction: s.lastAction, penalty: s.penalty };
+  }
+
   viewFor(viewerId) {
     const showGrid = this.gridPhases().includes(this.phase);
     const showBoard = this.boardPhases().includes(this.phase);
@@ -430,8 +665,9 @@ class MemoryPoker {
       pot: this.pot,
       deadline: this.deadline,
       settings: this.settings,
-      durations: { memorize: this.memorizeMs, reveal: CFG.revealMs, shuffle: this.shuffleMs || 0, pick: this.pickMs, showdown: CFG.showdownMs },
+      durations: { memorize: this.memorizeMs, reveal: CFG.revealMs, shuffle: this.shuffleMs || 0, pick: this.pickMs, bet: this.turnMs, showdown: CFG.showdownMs },
       notice: this.notice,
+      ...this.betView(viewerId),
       grid: this.grid.map((card) => ({ card: showGrid ? card : null })),
       board: showBoard ? this.board : [],
       players: this.players.map((p) => {
@@ -449,6 +685,7 @@ class MemoryPoker {
           next: s.next,
           pickCount: s.picks.length,
           picks: p.id === viewerId || showAllPicks ? s.picks : null,
+          ...this.playerBetView(s),
         };
       }),
       result: showAllPicks ? this.result : null,

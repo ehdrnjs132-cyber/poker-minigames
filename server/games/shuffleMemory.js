@@ -57,7 +57,7 @@ class ShuffleMemory extends MemoryPoker {
 
   boardPhases() {
     // Keep the board hidden during the shuffle so eyes stay on the grid.
-    return ['pick', 'showdown', 'gameover'];
+    return ['pick', 'bet', 'showdown', 'gameover'];
   }
 
   extraView() {

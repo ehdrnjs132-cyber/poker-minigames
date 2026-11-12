@@ -74,6 +74,12 @@ const SFX = (() => {
     flipWave(n = 16, gap = 0.04, start = 0) { for (let i = 0; i < n; i++) this.flip(start + i * gap); },
     deal() { for (let i = 0; i < 5; i++) noise(0.14, { at: i * 0.12, freq: 1400, vol: 0.18, q: 0.6 }); },
     shuffle() { for (let i = 0; i < 14; i++) noise(0.05, { at: i * 0.03, freq: 2600 + Math.random() * 800, vol: 0.1 }); },
+    // Rising whoosh + bright stab when the winner spotlight opens.
+    spotlight() {
+      noise(0.5, { freq: 700, vol: 0.14, q: 0.4 });
+      tone(220, 0.45, { type: 'sawtooth', vol: 0.05, slide: 880 });
+      [784, 988, 1175].forEach((f) => tone(f, 0.5, { type: 'triangle', vol: 0.09, at: 0.42 }));
+    },
     swoosh: () => noise(0.32, { freq: 900, vol: 0.16, q: 0.5 }),
     pop: () => { tone(740, 0.09, { type: 'sine', vol: 0.16, slide: 1180 }); tone(1180, 0.08, { type: 'triangle', vol: 0.06, at: 0.06 }); },
     tick: () => tone(1320, 0.05, { type: 'square', vol: 0.05 }),
