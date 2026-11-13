@@ -1045,7 +1045,10 @@
         ${mine}
         <div class="sp-tap">${t('sp.tap')}</div>
       </div>`;
-    countUp(el.querySelector('.sp-count'), r.share, 1200);
+    // Show what the winner actually gained this round (pot share minus their own ante/bets),
+    // not the whole pot, which includes their own chips.
+    const net = Math.max(0, r.share - (r.ante || 0) - (wHand?.bet || 0) - (wHand?.penalty || 0));
+    countUp(el.querySelector('.sp-count'), net, 1200);
     confetti(el.querySelector('.sp-confetti'), iWon ? 170 : 90);
     SFX.spotlight();
     setTimeout(() => (split ? SFX.split() : iWon ? SFX.win() : SFX.lose()), 650);
