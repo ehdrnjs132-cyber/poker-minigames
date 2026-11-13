@@ -1,0 +1,5 @@
+﻿Animations from LottieFiles (https://lottiefiles.com), free under the Lottie Simple License (commercial use allowed, attribution not required):
+- confetti.json: 'Confetti on transparent background' by Sportbank Design (lottiefiles.com/free-animation/confetti-on-transparent-background-ajhx1TPBa7)
+- coins-burst.json: 'Coins blow effect' by Artyom Konakov (lottiefiles.com/free-animation/coins-blow-effect-2YdQmUbuTz)
+- coins-fall.json: 'Falling coins' by buryastorm (lottiefiles.com/free-animation/falling-coins-KjVAkKwkiI)
+- trophy.json: 'Trophy' by Mahendra (lottiefiles.com/free-animation/trophy-yEGPe40FVr)

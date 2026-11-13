@@ -196,6 +196,7 @@
     }
     if (m.ko) {
       floatAt(el, 'K.O.!', 'ko');
+      if (el) { const rc = el.getBoundingClientRect(); window.FX?.burst(rc.left, rc.top - 20, 'ko'); }
       if (m.by === S.me) { window.SFX && SFX.fanfare(); toast(t('roam.youKo'), 2600); }
     }
   });

@@ -108,6 +108,12 @@
 
 서버가 카드 정보를 관리합니다. 카드가 뒤집힌 뒤에는 클라이언트로 카드 값을 보내지 않고, 쇼다운 전까지 상대 선택도 숨기기 때문에 개발자도구로 엿볼 수 없습니다.
 
+## 사용한 외부 에셋 (모두 무료·상업적 사용 가능)
+
+- **Kenney** (CC0): Casino Audio, Interface Sounds(효과음, `public/assets/sfx`), Particle Pack(별·반짝임·불꽃·연기, 128px로 줄여 `public/assets/fx`). 라이선스: `public/assets/LICENSE-kenney-*.txt`.
+- **LottieFiles** (Lottie Simple License): 컨페티, 코인 터짐, 코인 쏟아짐, 트로피(`public/assets/lottie`, 출처: `LICENSE.txt`). 재생은 lottie-web(cdnjs, 처음 쓸 때만 불러옴).
+- 연출 위치: 라운드 승리(전체 컨페티 + 승자 코인 + 별·하트 파티클), 최종 우승(컨페티 + 트로피), 베팅(콜 반짝임 / 레이즈 금빛 링·별 / 큰 레이즈 코인 터짐 / 올인 불꽃·플레어·코인 폭발 + 칩 효과음), 폭탄·K.O.(연기·불꽃), 피노키오 공개. 효과음은 실제 칩·카드 녹음을 쓰고, 파일을 못 쓰는 브라우저는 합성음으로 대체합니다(`public/fx.js`, `public/sfx.js`).
+
 ## 로컬 실행
 
 ```bash

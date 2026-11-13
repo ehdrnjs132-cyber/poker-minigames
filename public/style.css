@@ -1618,3 +1618,11 @@ body.taunt-aim .rc:not(.mine) .rc-head, body.coupon-aim .rc:not(.mine) .rc-head 
 body.coupon-aim .iseat:not(.me):not(.empty) .is-avatar, body.taunt-aim .iseat:not(.me):not(.empty) .is-avatar { box-shadow: 0 0 0 4px rgba(255, 77, 109, .9), 0 0 22px rgba(255, 77, 109, .8); }
 .rc { width: 0; height: 0; }
 body.taunt-aim .rc::before, body.coupon-aim .rc::before { content: ''; position: absolute; left: -26px; top: -76px; width: 52px; height: 84px; }
+
+/* effects layers (Kenney particles + Lottie) */
+.fx-canvas { position: fixed; inset: 0; width: 100vw; height: 100vh; z-index: 64; pointer-events: none; }
+.fx-lottie { position: fixed; pointer-events: none; }
+.fx-lottie.full { inset: 0; }
+.fx-lottie svg { width: 100% !important; height: 100% !important; }
+.login-screen[hidden] { display: none !important; }
+.roam-layer { z-index: 19; } /* winner spotlight (22) and result overlay (20) cover the walking avatars */

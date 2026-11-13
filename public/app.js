@@ -458,7 +458,7 @@
       ipRaiseLabel();
       return SFX.click();
     }
-    if (a === 'raiseTo') { SFX.chips(); return act('raise', { to: ipRaiseTo }); }
+    if (a === 'raiseTo') return act('raise', { to: ipRaiseTo });
     if (a === 'liarPlay') { SFX.deal(); const cards = [...liarSel]; liarSel.clear(); return act('play', { cards }); }
     if (a === 'invite') return copyInvite();
     if (a === 'exit') return $('#leaveBtn').click();
@@ -1191,6 +1191,7 @@
         fx.style.top = `${r.top + r.height / 2}px`;
         document.body.appendChild(fx);
         setTimeout(() => fx.remove(), 1800);
+        window.FX?.burst(r.left + r.width / 2, r.top + r.height / 2, 'boom');
       }
       $('#room').classList.remove('shake');
       reflow($('#room'));
@@ -1349,6 +1350,8 @@
       if (ph === 'reveal' && rv) {
         SFX.spotlight();
         setTimeout(() => (rv.lied ? SFX.lose() : SFX.win()), 450);
+        const who = document.querySelector(`.iseat[data-id="${rv.by}"] .is-avatar`);
+        setTimeout(() => window.FX?.at(who, rv.lied ? 'ko' : 'sparkle'), 300);
         const center = $('#lCenter');
         if (center) {
           center.classList.remove('flash-lie', 'flash-true');
@@ -1462,6 +1465,7 @@
     // not the whole pot, which includes their own chips.
     const net = Math.max(0, r.share - (r.ante || 0) - (wHand?.bet || 0) - (wHand?.penalty || 0));
     countUp(el.querySelector('.sp-count'), net, 1200);
+    setTimeout(() => window.FX?.win(el.querySelector('.sp-avatar'), iWon), 250);
     confetti(el.querySelector('.sp-confetti'), iWon ? 170 : 90);
     SFX.spotlight();
     setTimeout(() => (split ? SFX.split() : iWon ? SFX.win() : SFX.lose()), 650);
@@ -1689,14 +1693,35 @@
         </div>
         <div class="wait">${waiting}</div>
       </div>`);
+    if (!ov.classList.contains('show')) setTimeout(() => window.FX?.champion(won), 200);
     ov.classList.add('show');
   }
 
+  // Bet effects: call = small sparkle, raise = ring + stars, big raise = coin
+  // burst, all-in = flames + coin explosion (with matching chip sounds).
+  function betEffects() {
+    if (!P || S.phase !== 'bet' || P.dealId !== S.dealId) return;
+    for (const p of S.players) {
+      const a = p.lastAction;
+      const b = P.players.find((q) => q.id === p.id)?.lastAction;
+      if (!a || (b && a.kind === b.kind && a.amount === b.amount)) continue;
+      let level = 0;
+      if (a.kind === 'call') level = 1;
+      else if (a.kind === 'raise') level = a.amount >= Math.max(200, (S.pot || 0) * 0.75) ? 3 : 2;
+      else if (a.kind === 'allin') level = 4;
+      if (!level) continue;
+      const seat = document.querySelector(`.iseat[data-id="${p.id}"] .is-avatar, .seat[data-id="${p.id}"] .avatar`);
+      window.FX?.bet(seat, level);
+      if (level >= 4) SFX.allin(); else SFX.bet(level);
+    }
+  }
+
   function phaseEffects() {
+    betEffects();
     if (S.phase === 'bet') {
       if (S.turn === S.me && (P?.turn !== S.me || P?.phase !== 'bet')) SFX.select();
       // Chip sound whenever someone puts money in.
-      if (P?.phase === 'bet' && P?.dealId === S.dealId && S.pot > P.pot) SFX.chips();
+
     }
     if (S.game === 'indian') {
       if (S.phase === 'bet' && P?.dealId !== S.dealId) { SFX.shuffle(); SFX.deal(); }
