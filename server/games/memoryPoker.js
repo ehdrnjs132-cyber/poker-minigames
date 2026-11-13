@@ -19,6 +19,7 @@ const CFG = {
   defaultPlayers: 4,
   maxRaises: 4,
   raiseSteps: [50, 100],
+  lateJoinRound: 6, // newcomers can take a seat mid-game and play from the next round, up to round 6
 };
 const ACTIVE_PHASES = ['memorize', 'reveal', 'shuffle', 'pick', 'bet', 'showdown'];
 const BET_ACTIONS = ['check', 'call', 'raise', 'fold'];
@@ -79,6 +80,17 @@ class MemoryPoker {
 
   canJoin() {
     return this.phase === 'lobby' && this.players.length < this.maxPlayers;
+  }
+
+  // Joining a game in progress: a free seat and no later than round LATE_JOIN_ROUND.
+  // The newcomer sits out until the next round starts.
+  canLateJoin() {
+    return this.players.length < this.maxPlayers
+      && (this.phase === 'gameover' || (ACTIVE_PHASES.includes(this.phase) && this.round < CFG.lateJoinRound));
+  }
+
+  canSit() {
+    return this.canJoin() || this.canLateJoin();
   }
 
   activePlayers() {
@@ -186,7 +198,9 @@ class MemoryPoker {
   }
 
   onJoin(player) {
-    const s = { chips: CFG.startChips, ready: !!player.bot, out: false };
+    const s = { chips: CFG.startChips, ready: !!player.bot, out: false, pending: false };
+    // Mid-game arrivals wait for the next deal (out of this hand, no ante).
+    if (ACTIVE_PHASES.includes(this.phase)) { s.out = true; s.pending = true; }
     this.resetHand(s);
     this.ps.set(player.id, s);
     this.notice = null;
@@ -515,6 +529,7 @@ class MemoryPoker {
       s.chips = CFG.startChips;
       s.ready = false;
       s.out = false;
+      s.pending = false;
     }
     this.round = 0;
     this.final = null;
@@ -525,7 +540,10 @@ class MemoryPoker {
 
   nextRound() {
     this.round++;
-    for (const s of this.ps.values()) if (s.chips <= 0) s.out = true;
+    for (const s of this.ps.values()) {
+      if (s.pending) { s.pending = false; s.out = false; }
+      if (s.chips <= 0) s.out = true;
+    }
     const active = this.activePlayers().map((p) => this.ps.get(p.id));
     const scheduled = CFG.antes[Math.min(this.round - 1, CFG.antes.length - 1)];
     // Cap the ante at the shortest stack so nobody needs a side pot.
@@ -665,6 +683,8 @@ class MemoryPoker {
       maxRounds: CFG.maxRounds,
       maxPlayers: this.maxPlayers,
       minPlayers: CFG.minPlayers,
+      lateJoinRound: CFG.lateJoinRound,
+      canSit: this.canSit(),
       ante: this.ante,
       pot: this.pot,
       deadline: this.deadline,
@@ -683,6 +703,7 @@ class MemoryPoker {
           connected: p.connected,
           chips: s.chips,
           out: s.out,
+          pending: !!s.pending,
           ready: s.ready,
           memorized: s.memorized,
           locked: s.locked,

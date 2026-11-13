@@ -90,6 +90,8 @@
     profile: () => ME,
     setProfile: (u) => { ME = u; renderNavMe(); if (S) render(); },
     avatarInner: (p) => avatarInner(p),
+    colorFor: (id) => colorFor(id),
+    myName: () => nameInput.value.trim() || ME?.name || pref.get('name') || '',
     credentials: () => ({ uid: pref.get('uid'), token: pref.get('utok') }),
     useCredentials: (uid, token) => { pref.set('uid', uid); pref.set('utok', token); },
   };
@@ -209,14 +211,16 @@
       return;
     }
     setHTML(box, list.map((r) => {
-      const status = r.joinable ? t('rooms.waiting') : r.playing ? t('rooms.playing') : t('rooms.full');
+      const status = !r.playing ? (r.joinable ? t('rooms.waiting') : t('rooms.full'))
+        : t('rooms.playingRound', { n: r.round }) + (r.joinable ? ` · ${t('rooms.lateOk')}` : '');
+      const btn = r.joinable ? (r.playing ? t('rooms.lateJoin') : t('join.btn')) : t('rooms.watch');
       return `<div class="room-row${r.joinable ? '' : ' closed'}">
         <span class="room-game g-${r.gameId}">${esc(t(`game.${r.gameId}`))}</span>
         <div class="room-info">
           <b>${esc(t('rooms.host', { name: r.host }))}</b>
-          <span>${t('rooms.players', { n: r.players, max: r.max })}${r.bots ? ` · ${t('rooms.bots', { n: r.bots })}` : ''} · <em class="${r.joinable ? 'ok' : ''}">${status}</em></span>
+          <span>${t('rooms.players', { n: r.players, max: r.max })}${r.bots ? ` · ${t('rooms.bots', { n: r.bots })}` : ''}${r.watchers ? ` · 👀 ${r.watchers}` : ''} · <em class="${r.joinable ? 'ok' : ''}">${status}</em></span>
         </div>
-        <button class="btn ${r.joinable ? 'gold' : 'ghost'}" data-join="${r.code}" ${r.joinable ? '' : 'disabled'}>${t('join.btn')}</button>
+        <button class="btn ${r.joinable ? 'gold' : 'ghost'}" data-join="${r.code}">${btn}</button>
       </div>`;
     }).join(''));
   }
@@ -242,12 +246,12 @@
       const isMe = u.uid === myUid;
       const r = u.room;
       const game = r ? t(`game.${r.gameId}`) : '';
-      const status = !r ? t('online.lobby') : r.playing ? t('online.playing', { game }) : t('online.waiting', { game });
-      const canJoin = r && r.joinable && !isMe;
+      const status = !r ? t('online.lobby') : r.watching ? t('online.watching', { game }) : r.playing ? t('online.playing', { game }) : t('online.waiting', { game });
+      const canJoin = r && !isMe;
       return `<div class="person${r ? (r.playing ? ' busy' : ' waiting') : ''}${isMe ? ' me' : ''}">
         <div class="avatar" style="background:${colorFor(u.uid)}">${avatarInner(u)}</div>
         <div class="p-info"><b>${esc(u.name)}${isMe ? `<em>${t('online.me')}</em>` : ''}</b><span><i class="dot"></i>${esc(status)}</span></div>
-        ${canJoin ? `<button class="btn gold small" data-join="${r.code}">${t('online.join')}</button>` : ''}
+        ${canJoin ? `<button class="btn ${r.joinable ? 'gold' : 'ghost'} small" data-join="${r.code}">${r.joinable ? t('online.join') : t('rooms.watch')}</button>` : ''}
       </div>`;
     }
   }
@@ -272,8 +276,8 @@
       card.hidden = false;
       card._info = info;
       renderInvite();
-      if (info.joinable && pref.get('name')) join(info.code);
-      else if (info.joinable) nameInput.focus();
+      if (pref.get('name')) join(info.code);
+      else nameInput.focus();
     });
   }
   function renderInvite() {
@@ -281,8 +285,10 @@
     if (!info) return;
     $('#inviteTitle').textContent = t('invite.title', { name: info.host, game: t(`game.${info.gameId}`) });
     $('#inviteMeta').textContent = [t('rooms.players', { n: info.players, max: info.max }),
-      info.joinable ? (pref.get('name') ? '' : t('invite.needName')) : t(info.playing ? 'srv.inProgress' : 'srv.full')].filter(Boolean).join(' · ');
-    $('#inviteJoin').disabled = !info.joinable;
+      info.playing ? t('rooms.playingRound', { n: info.round }) : '',
+      info.joinable ? (info.playing ? t('rooms.lateOk') : '') : t('invite.watchOnly'),
+      pref.get('name') ? '' : t('invite.needName')].filter(Boolean).join(' · ');
+    $('#inviteJoin').textContent = info.joinable ? t('invite.enter') : t('rooms.watch');
   }
   $('#inviteJoin').addEventListener('click', () => join($('#inviteCard')._info?.code || urlRoom));
   nameInput.addEventListener('keydown', (e) => {
@@ -347,7 +353,9 @@
 
   // ------------------------------------------------------------- room controls
   $('#leaveBtn').addEventListener('click', () => {
-    if (S && !['lobby', 'gameover'].includes(S.phase) && !confirm(t('confirm.leave'))) return;
+    // Only a seated, active player loses anything by leaving mid-game.
+    const seated = S && S.players.find((p) => p.id === S.me && !p.pending && !p.out);
+    if (seated && !['lobby', 'gameover'].includes(S.phase) && !confirm(t('confirm.leave'))) return;
     socket.emit('leave');
     session.clear();
     history.replaceState(null, '', location.pathname);
@@ -417,6 +425,11 @@
     $('#roundInfo').textContent = S.round ? `${S.round}/${S.maxRounds}` : '-';
     $('#anteInfo').textContent = S.ante ? fmt(S.ante) : '-';
     $('#potInfo').textContent = fmt(inResult && S.result ? S.result.pot : S.pot);
+    const watchers = S.spectators || [];
+    $('#watchInfo').hidden = !watchers.length;
+    $('#watchCount').textContent = watchers.length;
+    $('#watchInfo').title = watchers.map((w) => w.name).join(', ');
+    $('#room').classList.toggle('watching', !!S.spectator);
 
     renderOpps(ctx);
     renderSeat($('#seatMe'), me, true, ctx);
@@ -466,7 +479,8 @@
     el.className = `seat ${isMe ? 'me' : 'opp'}${isWinner ? ' winner' : ''}${p.out ? ' out' : ''}${p.folded ? ' folded' : ''}${turn ? ' turn' : ''}`;
 
     let badge = '';
-    if (p.out && ph !== 'lobby' && ph !== 'gameover') badge = `<span class="badge warn">${t('badge.out')}</span>`;
+    if (p.pending && ph !== 'lobby' && ph !== 'gameover') badge = `<span class="badge ok">${t('badge.nextRound')}</span>`;
+    else if (p.out && ph !== 'lobby' && ph !== 'gameover') badge = `<span class="badge warn">${t('badge.out')}</span>`;
     else if (!p.connected) badge = `<span class="badge warn">${t('badge.off')}</span>`;
     else if (ph === 'lobby' || ph === 'gameover') badge = p.ready ? `<span class="badge ok">${t('badge.ready')}</span>` : `<span class="badge">${t('badge.wait')}</span>`;
     else if (ph === 'memorize') badge = p.memorized ? `<span class="badge ok">${t('badge.memorized')}</span>` : `<span class="badge">${t('badge.memorizing')}</span>`;
@@ -487,7 +501,7 @@
     const removeBtn = p.bot && ph === 'lobby' ? `<button class="seat-x" data-act="removeBot" data-id="${p.id}" aria-label="${t('bot.remove')}" title="${t('bot.remove')}">×</button>` : '';
 
     let delta = '';
-    if (ph === 'showdown' && S.result) {
+    if (ph === 'showdown' && S.result && hand) {
       const won = S.result.winners.includes(p.id);
       const net = (won ? S.result.share : 0) - S.result.ante - (hand?.bet || 0);
       if (net) delta = `<span class="delta ${net > 0 ? 'plus' : 'minus'}">${net > 0 ? '+' : ''}${fmt(net)}</span>`;
@@ -575,7 +589,7 @@
       el.classList.toggle('mine', mine);
       el.classList.toggle('opp', theirs.length > 0);
       el.classList.toggle('nuts', isNuts);
-      el.classList.toggle('pickable', ph === 'pick' && !me?.locked && !me?.out);
+      el.classList.toggle('pickable', ph === 'pick' && !!me && !me.locked && !me.out);
       el.classList.toggle('dim', inResult && !picked.has(i) && !isNuts);
       el.classList.toggle('hl', inResult && picked.has(i) && hlCards.has(info?.card));
       const shown = theirs.slice(0, 2).map((o) => `<span class="t-opp">${esc(o.name.slice(0, 4))}</span>`).join('');
@@ -811,10 +825,12 @@
 
   function renderActions({ me, opp }) {
     const bar = $('#actionBar');
-    if (!me) return setHTML(bar, '');
+    if (!me) return setHTML(bar, spectatorActions());
     const ph = S.phase;
     let html = '';
-    if (me.out && ph !== 'lobby' && ph !== 'gameover') {
+    if (me.pending && ph !== 'lobby' && ph !== 'gameover') {
+      html = `<span class="hint">${t('hint.pending')}</span>`;
+    } else if (me.out && ph !== 'lobby' && ph !== 'gameover') {
       html = `<span class="hint">${t('hint.out')}</span>`;
     } else if (ph === 'lobby') {
       const full = S.players.length >= S.maxPlayers;
@@ -845,6 +861,15 @@
         : `<button class="btn blue" data-act="next">${last ? t('act.final') : t('act.nextRound')}</button>`;
     }
     setHTML(bar, html);
+  }
+
+  // Watching: take a seat when one opens (mid-game seats play from the next round).
+  function spectatorActions() {
+    const inGame = !['lobby', 'gameover'].includes(S.phase);
+    const sit = S.canSit
+      ? `<button class="btn gold big" data-act="sit">${inGame ? t('watch.sitNext') : t('watch.sit')}</button>`
+      : `<span class="hint">${inGame && S.players.length < S.maxPlayers ? t('watch.tooLate', { n: S.lateJoinRound }) : t('watch.full')}</span>`;
+    return `<div class="action-row"><span class="watch-tag">👀 ${t('watch.on')}</span>${sit}</div>`;
   }
 
   function betActions(me) {
@@ -901,7 +926,8 @@
         <div class="standings">${rows}</div>
         <div class="result-actions">
           <button class="btn ghost" data-act="exit">${t('act.exit')}</button>
-          <button class="btn ${me?.ready ? 'ghost' : 'gold'} big" data-act="ready">${me?.ready ? t('act.unready') : t('act.rematch')}</button>
+          ${!me ? (S.canSit ? `<button class="btn gold big" data-act="sit">${t('watch.sit')}</button>` : '')
+            : `<button class="btn ${me.ready ? 'ghost' : 'gold'} big" data-act="ready">${me.ready ? t('act.unready') : t('act.rematch')}</button>`}
         </div>
         <div class="wait">${waiting}</div>
       </div>`);

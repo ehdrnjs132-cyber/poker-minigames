@@ -1,4 +1,4 @@
-﻿<!doctype html>
+<!doctype html>
 <html lang="ko">
 <head>
   <meta charset="utf-8" />
@@ -58,6 +58,8 @@
         <input id="nameInput" maxlength="12" autocomplete="nickname" placeholder="닉네임을 입력하세요" data-i18n-ph="nick.ph" />
       </label>
 
+      <div id="plaza" class="plaza" aria-label="Lobby plaza"></div>
+
       <h2 class="section-title"><span data-i18n="games.title">게임 선택</span> <small data-i18n="games.sub">방을 만들고 친구를 초대하세요</small></h2>
       <div class="games">
         <button class="game-card" data-game="memory">
@@ -112,6 +114,7 @@
       <div class="info-chips">
         <span class="chip-info"><em>ROUND</em><b id="roundInfo">-</b></span>
         <span class="chip-info"><em>ANTE</em><b id="anteInfo">-</b></span>
+        <span class="chip-info watch-chip" id="watchInfo" hidden><em>👀</em><b id="watchCount">0</b></span>
       </div>
       <button class="icon-btn" data-tutorial data-i18n-label="howto">
         <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9.5" fill="none" stroke="currentColor" stroke-width="2"/><path d="M9.3 9.4a2.8 2.8 0 0 1 5.4 1c0 1.9-2.7 2.3-2.7 4" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><circle cx="12" cy="17.6" r="1.2" fill="currentColor"/></svg>
@@ -301,5 +304,6 @@
   <script src="chat.js"></script>
   <script src="tutorial.js"></script>
   <script src="profile.js"></script>
+  <script src="plaza.js"></script>
 </body>
 </html>

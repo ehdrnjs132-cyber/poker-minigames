@@ -1,4 +1,4 @@
-﻿const path = require('path');
+const path = require('path');
 const http = require('http');
 const crypto = require('crypto');
 const express = require('express');
@@ -18,6 +18,7 @@ const CHAT_HISTORY = 40;
 const CHAT_MAX_LEN = 120;
 const CHAT_BURST = 5;          // messages allowed per window
 const CHAT_WINDOW_MS = 4000;
+const MAX_SPECTATORS = 20;
 
 const app = express();
 app.use(express.static(path.join(__dirname, '..', 'public')));
@@ -55,7 +56,7 @@ function cleanName(name) {
 function createRoom(gameId, settings) {
   const Game = GAMES[gameId];
   if (!Game) return null;
-  const room = { code: genCode(), gameId, players: [], chat: [], chatSeq: 0, cleanupTimer: null };
+  const room = { code: genCode(), gameId, players: [], spectators: [], chat: [], chatSeq: 0, cleanupTimer: null };
   room.broadcast = () => { broadcast(room); announceRooms(); };
   room.postChat = (msg) => postChat(room, msg);
   // Records: game players → profiles (bots have no userId and aren't recorded).
@@ -74,19 +75,26 @@ function createRoom(gameId, settings) {
 function broadcast(room) {
   const now = Date.now();
   const faces = new Map(room.players.map((p) => [p.id, { uid: p.userId || null, avatar: p.avatar || null, avatarV: p.avatarV || 0 }]));
-  for (const p of room.players) {
-    if (!p.socketId) continue;
+  const watchers = room.spectators.map((s) => ({ id: s.id, name: s.name, uid: s.userId || null, avatar: s.avatar || null, avatarV: s.avatarV || 0 }));
+  const send = (p, spectator) => {
+    if (!p.socketId) return;
     const view = room.game.viewFor(p.id);
     for (const vp of view.players) Object.assign(vp, faces.get(vp.id));
-    io.to(p.socketId).emit('state', { now, code: room.code, gameId: room.gameId, me: p.id, ...view });
-  }
+    io.to(p.socketId).emit('state', { now, code: room.code, gameId: room.gameId, me: p.id, spectator, spectators: watchers, ...view });
+  };
+  for (const p of room.players) send(p, false);
+  for (const s of room.spectators) send(s, true);
+}
+
+function members(room) {
+  return [...room.players, ...room.spectators];
 }
 
 function postChat(room, msg) {
   const full = { id: ++room.chatSeq, at: Date.now(), ...msg };
   room.chat.push(full);
   if (room.chat.length > CHAT_HISTORY) room.chat.shift();
-  for (const p of room.players) if (p.socketId) io.to(p.socketId).emit('chat', full);
+  for (const p of members(room)) if (p.socketId) io.to(p.socketId).emit('chat', full);
 }
 
 function scheduleCleanup(room) {
@@ -100,6 +108,7 @@ function destroyRoom(room) {
   clearTimeout(room.cleanupTimer);
   room.game.dispose();
   rooms.delete(room.code);
+  for (const s of room.spectators) if (s.socketId) io.to(s.socketId).emit('kicked', { code: 'srv.roomClosed' });
   announceRooms();
 }
 
@@ -116,7 +125,9 @@ function roomSummary(room) {
     bots: room.players.length - humans.length,
     max: room.game.maxPlayers,
     playing: room.game.phase !== 'lobby',
-    joinable: room.game.canJoin(),
+    joinable: room.game.canSit(), // waiting room, or mid-game while late seats are open
+    round: room.game.round || 0,
+    watchers: room.spectators.length,
   };
 }
 
@@ -144,29 +155,51 @@ function announceRooms() {
 const online = new Map(); // socket.id -> { uid, room }
 function onlineList() {
   const byUid = new Map();
-  for (const { uid, room } of online.values()) {
+  for (const { uid, room, watching } of online.values()) {
     if (!uid) continue;
     const prev = byUid.get(uid);
     if (prev && prev.room) continue;
-    byUid.set(uid, { uid, room: room && rooms.has(room.code) ? room : null });
+    byUid.set(uid, { uid, room: room && rooms.has(room.code) ? room : null, watching });
   }
-  return [...byUid.values()].map(({ uid, room }) => {
+  return [...byUid.values()].map(({ uid, room, watching }) => {
     const u = profiles.getUser(uid) || {};
     const r = room && roomSummary(room);
     return {
       uid, name: u.name || 'Player', avatar: u.avatar || null, avatarV: u.avatarV || 0,
-      room: r ? { code: r.code, gameId: r.gameId, playing: r.playing, joinable: r.joinable } : null,
+      room: r ? { code: r.code, gameId: r.gameId, playing: r.playing, joinable: r.joinable, watching: !!watching } : null,
     };
   }).sort((a, b) => Number(!!a.room) - Number(!!b.room) || a.name.localeCompare(b.name)).slice(0, 60);
 }
 let onlineTimer = null;
 function announceOnline() {
   if (onlineTimer) return;
+  plazaDirty = true;
   onlineTimer = setTimeout(() => {
     onlineTimer = null;
     io.to('lobby').emit('online', onlineList());
   }, 400);
 }
+
+// ---- lobby plaza: everyone in the lobby walks around as a character -------
+const PLAZA_W = 760;
+const PLAZA_H = 520;
+const plaza = new Map(); // socket.id -> { x, y, d, m }
+let plazaDirty = false;
+function plazaList() {
+  const list = [];
+  for (const [sid, pos] of plaza) {
+    const o = online.get(sid);
+    if (!o || !o.uid || o.room) continue;
+    const u = profiles.getUser(o.uid) || {};
+    list.push({ sid, uid: o.uid, name: u.name || 'Player', avatar: u.avatar || null, avatarV: u.avatarV || 0, ...pos });
+  }
+  return list.slice(0, 40);
+}
+setInterval(() => {
+  if (!plazaDirty) return;
+  plazaDirty = false;
+  io.to('lobby').emit('plaza', plazaList());
+}, 100);
 
 function addBot(room, level) {
   if (!Bots.isLevel(level) || !room.game.canJoin()) return;
@@ -248,23 +281,33 @@ io.on('connection', (socket) => {
     }
     player.socketId = socket.id;
     player.connected = true;
-    ctx = { room, player };
-    online.get(socket.id).room = room;
+    const spectator = room.spectators.includes(player);
+    ctx = { room, player, spectator };
+    Object.assign(online.get(socket.id), { room, watching: spectator });
+    plaza.delete(socket.id);
     socket.leave('lobby');
     clearTimeout(room.cleanupTimer);
     socket.emit('chatHistory', room.chat);
     room.broadcast();
   }
 
-  function detach() {
-    if (!ctx) return;
-    const { room, player } = ctx;
-    ctx = null;
-    online.get(socket.id).room = null;
+  function backToLobby() {
+    Object.assign(online.get(socket.id) || {}, { room: null, watching: false });
     socket.join('lobby');
     socket.emit('rooms', roomList());
     socket.emit('online', onlineList());
     announceOnline();
+  }
+
+  function detach() {
+    if (!ctx) return;
+    const { room, player, spectator } = ctx;
+    ctx = null;
+    backToLobby();
+    if (spectator) {
+      room.spectators = room.spectators.filter((s) => s !== player);
+      return room.broadcast();
+    }
     // Walking out of a game in progress counts as finishing last.
     const phase = room.game.phase;
     if (!['lobby', 'gameover'].includes(phase) && !room.game.ps.get(player.id)?.out) {
@@ -283,8 +326,8 @@ io.on('connection', (socket) => {
     const now = Date.now();
     while (chatTimes.length && now - chatTimes[0] > CHAT_WINDOW_MS) chatTimes.shift();
     if (chatTimes.length >= CHAT_BURST) return socket.emit('chatError', { code: 'srv.chatFast' });
-    const { player, room } = ctx;
-    const base = { playerId: player.id, name: player.name };
+    const { player, room, spectator } = ctx;
+    const base = { playerId: player.id, name: player.name, spectator: spectator || undefined };
     if (msg.kind === 'sticker' && /^[a-z0-9]{1,16}$/.test(String(msg.sticker))) {
       chatTimes.push(now);
       postChat(room, { ...base, kind: 'sticker', sticker: msg.sticker });
@@ -306,43 +349,77 @@ io.on('connection', (socket) => {
     attach(room, player);
   });
 
-  socket.on('join', ({ name, code, playerId } = {}, ack) => {
+  // Take a seat: waiting room, or mid-game (plays from the next round).
+  function seat(room, player) {
+    const late = room.game.phase !== 'lobby';
+    room.players.push(player);
+    room.game.onJoin(player);
+    attach(room, player);
+    postChat(room, { kind: 'system', code: late && room.game.phase !== 'gameover' ? 'sys.lateJoined' : 'sys.joined', name: player.name });
+    room.broadcast();
+  }
+
+  // Join = sit down if a seat is open, otherwise watch (unless watch=false).
+  socket.on('join', ({ name, code, playerId, watch } = {}, ack) => {
     const room = rooms.get(String(code || '').toUpperCase());
     if (!room) return reply(ack, { ok: false, code: 'srv.notFound' });
 
-    const existing = playerId && room.players.find((p) => p.id === playerId);
+    const existing = playerId && members(room).find((p) => p.id === playerId);
     if (existing) {
       reply(ack, { ok: true, code: room.code, playerId: existing.id, rejoined: true });
       return attach(room, existing);
     }
-    if (!room.game.canJoin()) {
+    const player = makePlayer(name);
+    if (watch !== 'only' && room.game.canSit()) {
+      reply(ack, { ok: true, code: room.code, playerId: player.id });
+      return seat(room, player);
+    }
+    if (watch === false) {
       const full = room.players.length >= room.game.maxPlayers;
       return reply(ack, { ok: false, code: full ? 'srv.full' : 'srv.inProgress' });
     }
-    const player = makePlayer(name);
-    room.players.push(player);
-    room.game.onJoin(player);
-    reply(ack, { ok: true, code: room.code, playerId: player.id });
+    if (room.spectators.length >= MAX_SPECTATORS) return reply(ack, { ok: false, code: 'srv.full' });
+    room.spectators.push(player);
+    reply(ack, { ok: true, code: room.code, playerId: player.id, spectator: true });
     attach(room, player);
-    postChat(room, { kind: 'system', code: 'sys.joined', name: player.name });
+    postChat(room, { kind: 'system', code: 'sys.watching', name: player.name });
   });
 
   socket.on('action', (action) => {
     if (!ctx || !action || typeof action !== 'object') return;
-    const { room } = ctx;
+    const { room, player, spectator } = ctx;
+    if (spectator) {
+      if (action.type !== 'sit' || !room.game.canSit()) return;
+      room.spectators = room.spectators.filter((s) => s !== player);
+      ctx = null; // seat() re-attaches as a player
+      return seat(room, player);
+    }
     if (action.type === 'addBot') return addBot(room, action.level);
     if (action.type === 'removeBot') return removeBot(room, action.id);
-    room.game.onAction(ctx.player.id, action);
+    room.game.onAction(player.id, action);
   });
 
   socket.on('leave', () => detach());
 
+  // Lobby plaza movement (only while standing in the lobby).
+  socket.on('plaza:move', (m) => {
+    if (ctx || !uid || !m || typeof m !== 'object') return;
+    const num = (v, max) => Math.max(0, Math.min(max, Number(v) || 0));
+    plaza.set(socket.id, { x: Math.round(num(m.x, PLAZA_W)), y: Math.round(num(m.y, PLAZA_H)), d: m.d === -1 ? -1 : 1, m: !!m.m });
+    plazaDirty = true;
+  });
+
   socket.on('disconnect', () => {
     online.delete(socket.id);
+    plaza.delete(socket.id);
     announceOnline();
     if (!ctx) return;
-    const { room, player } = ctx;
+    const { room, player, spectator } = ctx;
     if (player.socketId !== socket.id) return;
+    if (spectator) {
+      room.spectators = room.spectators.filter((s) => s !== player);
+      return room.broadcast();
+    }
     player.connected = false;
     player.socketId = null;
     room.broadcast();
