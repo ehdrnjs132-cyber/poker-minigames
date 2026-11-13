@@ -191,8 +191,8 @@ function announceOnline() {
 }
 
 // ---- lobby plaza: everyone in the lobby walks around as a character -------
-const PLAZA_W = 760;
-const PLAZA_H = 520;
+const PLAZA_W = 480;
+const PLAZA_H = 1240;
 const plaza = new Map(); // socket.id -> { x, y, d, m }
 let plazaDirty = false;
 function plazaList() {

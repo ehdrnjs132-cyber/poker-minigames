@@ -1,4 +1,4 @@
-﻿(() => {
+(() => {
   const socket = io();
   const $ = (s) => document.querySelector(s);
   const SUIT = { s: '♠', h: '♥', d: '♦', c: '♣' };
@@ -91,6 +91,8 @@
     setProfile: (u) => { ME = u; renderNavMe(); if (S) render(); },
     avatarInner: (p) => avatarInner(p),
     colorFor: (id) => colorFor(id),
+    createGame: (id) => createGame(id),
+    join: (code) => join(code),
     myName: () => nameInput.value.trim() || ME?.name || pref.get('name') || '',
     credentials: () => ({ uid: pref.get('uid'), token: pref.get('utok') }),
     useCredentials: (uid, token) => { pref.set('uid', uid); pref.set('utok', token); },
@@ -98,6 +100,7 @@
   function renderNavMe() {
     const el = $('#navAvatar');
     if (el && ME) el.innerHTML = avatarInner({ ...ME, uid: ME.id });
+    $('#topName').textContent = nameInput.value.trim() || ME?.name || 'Player';
   }
   function hello() {
     socket.emit('hello', { uid: pref.get('uid'), token: pref.get('utok'), name: pref.get('name') }, (res) => {
@@ -120,11 +123,25 @@
   const urlRoom = new URLSearchParams(location.search).get('room');
   if (urlRoom) codeInput.value = urlRoom.toUpperCase().slice(0, 4);
 
+  // Lobby panels (settings / find rooms) — ranking & my page live in profile.js.
+  const openPanel = (id) => { $(id).classList.add('show'); SFX.click(); };
+  function askName() {
+    openPanel('#setPanel');
+    toast(t('err.nick'));
+    setTimeout(() => nameInput.focus(), 250);
+  }
+  $('#setBtn').addEventListener('click', () => openPanel('#setPanel'));
+  $('#roomsBtn').addEventListener('click', () => openPanel('#roomsPanel'));
+  $('#topChat').addEventListener('click', () => window.Chat && Chat.open());
+  $('#setMe').addEventListener('click', () => { $('#setPanel').classList.remove('show'); $('#meBtn').click(); });
+  // Save the nickname as soon as it's edited.
+  nameInput.addEventListener('change', () => { if (nameInput.value.trim()) getName(); renderNavMe(); });
+  nameInput.addEventListener('input', renderNavMe);
+
   function getName() {
     const n = nameInput.value.trim().slice(0, 12);
     if (!n) {
-      toast(t('err.nick'));
-      nameInput.focus();
+      askName();
       return null;
     }
     pref.set('name', n);
@@ -135,14 +152,12 @@
     return n;
   }
 
-  document.querySelectorAll('[data-game]').forEach((btn) =>
-    btn.addEventListener('click', () => {
-      if (btn.classList.contains('locked')) return toast(t('err.soon'));
-      if (!getName()) return;
-      SFX.click();
-      openSetup(btn.dataset.game);
-    })
-  );
+  // Called by the plaza when you stand on a game pad.
+  function createGame(gameId) {
+    if (!getName()) return;
+    SFX.click();
+    openSetup(gameId);
+  }
 
   // ---- create-room settings modal (last choice remembered per browser)
   const setupEl = $('#setup');
@@ -206,6 +221,7 @@
     roomsCache = list;
     const box = $('#roomList');
     $('#roomsCount').textContent = list.length ? t('rooms.count', { n: list.length }) : '';
+    $('#roomsBadge').textContent = list.length || '';
     if (!list.length) {
       setHTML(box, `<div class="room-empty">${t('rooms.empty')}</div>`);
       return;
@@ -277,7 +293,7 @@
       card._info = info;
       renderInvite();
       if (pref.get('name')) join(info.code);
-      else nameInput.focus();
+      else askName();
     });
   }
   function renderInvite() {
@@ -301,6 +317,7 @@
   function onJoined(res) {
     if (!res || !res.ok) return toast(I18N.msg(res) || t('err.joinFail'));
     session.set({ code: res.code, playerId: res.playerId });
+    document.querySelectorAll('.sheet-overlay.show').forEach((p) => p.classList.remove('show'));
     history.replaceState(null, '', `?room=${res.code}`);
     $('#inviteCard').hidden = true;
   }
@@ -379,7 +396,13 @@
       : '<svg viewBox="0 0 24 24"><path d="M4 9h4l5-4v14l-5-4H4z" fill="currentColor"/><path d="M16.5 8.5a5 5 0 0 1 0 7M19 6a8.5 8.5 0 0 1 0 12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>';
   }
   muteBtn.addEventListener('click', () => { SFX.toggleMute(); renderMute(); SFX.click(); });
+  // Same switch in the lobby settings panel.
+  const lobbyMute = $('#lobbyMute');
+  const renderLobbyMute = () => { lobbyMute.innerHTML = muteBtn.innerHTML + ` <span>${SFX.muted ? t('set.off') : t('set.on')}</span>`; };
+  lobbyMute.addEventListener('click', () => { SFX.toggleMute(); renderMute(); renderLobbyMute(); SFX.click(); });
   renderMute();
+  renderLobbyMute();
+  I18N.onChange(renderLobbyMute);
 
   $('#actionBar').addEventListener('click', onActionClick);
   $('#overlay').addEventListener('click', onActionClick);

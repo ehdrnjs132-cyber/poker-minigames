@@ -80,6 +80,8 @@ const Chat = (() => {
   function renderBadge() {
     badge.textContent = unread > 9 ? '9+' : String(unread);
     badge.classList.toggle('show', unread > 0);
+    const top = document.getElementById('topChatBadge'); // lobby top-bar chat button
+    if (top) { top.textContent = badge.textContent; top.classList.toggle('show', unread > 0); }
   }
 
   function itemHTML(m) {
