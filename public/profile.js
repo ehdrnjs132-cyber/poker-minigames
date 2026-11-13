@@ -11,7 +11,7 @@
   const avatar = (u) => `<div class="avatar">${window.HA.avatarInner({ ...u, uid: u.id })}</div>`;
   const winRate = (w, g) => (g ? Math.round((w / g) * 100) : 0);
   const bestText = (game, s) =>
-    game === 'indian' ? (s.bestCard ? t('rank.bestCard', { n: s.bestCard }) : '—') : s.bestScore ? I18N.hand(s.bestScore) : '—';
+    game === 'indian' ? (s.bestCard ? t('rank.bestCard', { n: ({ 11: 'J', 12: 'Q', 13: 'K', 14: 'A' }[s.bestCard] || s.bestCard) }) : '—') : s.bestScore ? I18N.hand(s.bestScore) : '—';
 
   function open(panel) {
     panel.classList.add('show');

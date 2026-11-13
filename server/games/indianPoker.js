@@ -6,21 +6,24 @@ const CFG = {
   antes: [20, 20, 20, 40, 40, 40, 60, 60, 60, 100, 100, 100],
   maxRounds: 12,
   showdownMs: 7500,
-  tenPenalty: 100,
+  topPenalty: 100, // folding an Ace (the top card) costs this
   minRaise: 20,
   maxRaises: 12,
 };
-// Two sets of 1–10: ♠ set and ♥ set. Codes reuse the card renderer ('T' = 10).
-const RANKS = ['1', '2', '3', '4', '5', '6', '7', '8', '9', 'T'];
-const DECK = [...RANKS.map((r) => `${r}s`), ...RANKS.map((r) => `${r}h`)];
-const value = (code) => (code ? (code[0] === 'T' ? 10 : Number(code[0])) : 0);
+// Standard poker ranks, low to high: 2 3 4 5 6 7 8 9 10 J Q K A.
+// Two suits (♠ and ♥) = 26 cards, so each rank appears twice (countable).
+const RANKS = '23456789TJQKA';
+const VALUE = Object.fromEntries([...RANKS].map((r, i) => [r, i + 2])); // 2..14 (A = 14)
+const DECK = [...[...RANKS].map((r) => `${r}s`), ...[...RANKS].map((r) => `${r}h`)];
+const value = (code) => (code ? VALUE[code[0]] : 0);
+const TOP = 14;
 
 /**
  * 인디언 포커 (Indian Poker / Blind Man's Bluff), 2–6 players.
  * Everyone wears one card on their forehead: you see every card but your own.
  * Free betting: raise any amount (min raise .. all-in), and you may fold at any
  * moment of the betting round, even out of turn. Highest number wins the pot,
- * ties split. Folding a 10 costs a penalty. The deck is only reshuffled when it
+ * ties split. Folding an Ace (the top card) costs a penalty. The deck is only reshuffled when it
  * runs out and revealed cards stay visible, so card counting pays off.
  */
 class IndianPoker extends MemoryPoker {
@@ -102,10 +105,10 @@ class IndianPoker extends MemoryPoker {
     this.changed();
   }
 
-  // Folding a 10 is punished: the penalty goes into the pot.
+  // Folding an Ace is punished: the penalty goes into the pot.
   onFold(s) {
-    if (value(s.card) === 10) {
-      s.penalty = Math.min(CFG.tenPenalty, s.chips);
+    if (value(s.card) === TOP) {
+      s.penalty = Math.min(CFG.topPenalty, s.chips);
       s.chips -= s.penalty;
       this.pot += s.penalty;
     }
@@ -168,7 +171,7 @@ class IndianPoker extends MemoryPoker {
   botFoldCost(p) {
     if (p.bot === 'easy') return 0;
     const pool = this.ownCardPool(p);
-    return (pool.filter((c) => value(c) === 10).length / Math.max(1, pool.length)) * CFG.tenPenalty;
+    return (pool.filter((c) => value(c) === TOP).length / Math.max(1, pool.length)) * CFG.topPenalty;
   }
 
   // Bots size free raises off the pot instead of fixed steps.
@@ -200,7 +203,7 @@ class IndianPoker extends MemoryPoker {
       durations: { bet: this.turnMs, showdown: CFG.showdownMs },
       notice: this.notice,
       ...this.betView(viewerId),
-      tenPenalty: CFG.tenPenalty,
+      topPenalty: CFG.topPenalty,
       deckLeft: this.deck.length,
       discards: this.discards.slice(-20),
       reshuffledAt: this.reshuffledAt || 0,

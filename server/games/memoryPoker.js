@@ -148,7 +148,7 @@ class MemoryPoker {
     return Math.pow(s.botConfidence ?? 0.35, opponents);
   }
 
-  // Extra cost a bot attaches to folding (Indian Poker: maybe folding a 10).
+  // Extra cost a bot attaches to folding (Indian Poker: maybe folding an Ace).
   botFoldCost(/* player */) {
     return 0;
   }

@@ -721,7 +721,9 @@
   // ============================================================ Indian Poker
   // Its own interface: a big oval table with up to 6 seats around it; every
   // character wears their card above the head (yours stays a "?").
-  const ipValue = (c) => (c ? (c[0] === 'T' ? 10 : Number(c[0])) : 0);
+  // Ranks 2..14 (J=11, Q=12, K=13, A=14) and how to show them.
+  const ipRankName = (v) => ({ 10: '10', 11: 'J', 12: 'Q', 13: 'K', 14: 'A' }[v] || String(v));
+  const ipCardName = (c) => (c ? (c[0] === 'T' ? '10' : c[0]) : '');
   // Seat anchor points (% of the table box): landscape and portrait tables.
   const IP_SLOTS = {
     wide: [[50, 89], [10, 63], [17, 17], [50, 6], [83, 17], [90, 63]],
@@ -838,7 +840,7 @@
       if (turn) badge = `<span class="badge think dots">${t('ip.thinking')}</span>`;
       else if (p.lastAction) badge = `<span class="badge ${p.folded ? 'warn' : 'ok'}">${actionLabel(p.lastAction)}</span>`;
     } else if (hand) {
-      badge = `<span class="badge hand">${hand.folded ? t('ip.fold') : t('ip.value', { n: hand.value })}</span>`;
+      badge = `<span class="badge hand">${hand.folded ? t('ip.fold') : t('ip.value', { n: ipRankName(hand.value) })}</span>`;
       if (hand.penalty) badge += `<span class="badge warn">${t('ip.penalty', { n: hand.penalty })}</span>`;
     }
     let delta = '';
@@ -867,10 +869,10 @@
     const pot = inResult && S.result ? S.result.pot : S.pot;
     const status = `<div class="ipc-status"><b id="ipLabel"></b><span id="ipSub"></span></div>`;
     if (S.phase === 'lobby') {
-      return `${status}<div class="ipc-rules">${t('ip.lobbyRules', { n: S.tenPenalty || 100 })}<br><b>${t('ip.freeRules')}</b></div>`;
+      return `${status}<div class="ipc-rules">${t('ip.lobbyRules', { n: S.topPenalty || 100 })}<br><b>${t('ip.freeRules')}</b></div>`;
     }
     const fresh = S.reshuffledAt === S.round && S.phase === 'bet';
-    const discards = (S.discards || []).map((c) => `<span class="mini-v ${c[1] === 'h' ? 'red' : ''}">${ipValue(c)}</span>`).join('');
+    const discards = (S.discards || []).map((c) => `<span class="mini-v ${c[1] === 'h' ? 'red' : ''}">${ipCardName(c)}</span>`).join('');
     const chips = Math.min(14, Math.ceil((pot || 0) / 60));
     return `${status}
       <div class="ipc-pot">
@@ -894,10 +896,10 @@
     if (mine.folded) {
       // The sting of Indian Poker: you folded the winning card.
       const best = Math.max(...r.hands.filter((h) => !h.folded).map((h) => h.value));
-      return mine.value > best ? t('ip.whyFoldedWin', { n: mine.value }) : t('ip.whyFolded', { n: mine.value });
+      return mine.value > best ? t('ip.whyFoldedWin', { n: ipRankName(mine.value) }) : t('ip.whyFolded', { n: ipRankName(mine.value) });
     }
-    if (r.winners.length > 1) return t('ip.whyTie', { n: r.hands.find((h) => h.id === r.winners[0]).value });
-    return t('ip.whyMine', { n: mine.value });
+    if (r.winners.length > 1) return t('ip.whyTie', { n: ipRankName(r.hands.find((h) => h.id === r.winners[0]).value) });
+    return t('ip.whyMine', { n: ipRankName(mine.value) });
   }
 
   function renderIndianStatus() {
@@ -920,7 +922,7 @@
     if (lab) { lab.textContent = label; $('#ipSub').textContent = sub; }
     showBanner(() => {
       const mine = S.result.hands.find((h) => h.id === S.me);
-      return mine ? t('ip.myCard', { n: mine.value }) : '';
+      return mine ? t('ip.myCard', { n: ipRankName(mine.value) }) : '';
     }, indianReason);
   }
 
@@ -1015,7 +1017,7 @@
     const split = winners.length > 1;
     const wHand = r.hands.find((h) => h.id === r.winners[0]);
     const indian = S.game === 'indian';
-    const handName = r.uncontested ? t('sp.allFold') : indian ? t('sp.indianWin', { n: wHand.value }) : I18N.hand(wHand.score);
+    const handName = r.uncontested ? t('sp.allFold') : indian ? t('sp.indianWin', { n: ipRankName(wHand.value) }) : I18N.hand(wHand.score);
     const title = split ? t('sp.split') : iWon ? t('sp.youWin') : t('sp.wins', { name: winners[0].name });
 
     let cards = '';
