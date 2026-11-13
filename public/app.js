@@ -1115,6 +1115,16 @@
     })();
   }
 
+  // "Name +N": what the winner really gained this round (not the whole pot).
+  function wonLine() {
+    const r = S.result;
+    if (!r || !r.winners.length) return '';
+    const w = r.hands.find((h) => h.id === r.winners[0]);
+    const net = Math.max(0, r.share - (r.ante || 0) - (w?.bet || 0) - (w?.penalty || 0));
+    const name = r.winners.map((id) => S.players.find((p) => p.id === id)?.name || '').join(', ');
+    return t('sub.won', { name, n: fmt(net) });
+  }
+
   function renderGridStatus({ me, opp }) {
     const ph = S.phase;
     const nut = S.game === 'nut';
@@ -1142,7 +1152,7 @@
       memorize: t('sub.memorize', { m: memSec }),
       reveal: t('sub.reveal'),
       pick: nut ? t('sub.nutPick') : t('sub.pick'),
-      showdown: S.result ? outcomeReason() || t('sub.pot', { n: fmt(S.result.pot) }) : '',
+      showdown: S.result ? outcomeReason() || wonLine() : '',
       gameover: '',
     };
     $('#phaseLabel').textContent = labels[ph] || '';
