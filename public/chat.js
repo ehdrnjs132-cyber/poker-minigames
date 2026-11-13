@@ -49,6 +49,7 @@ const Chat = (() => {
     if (e.key !== 'Enter' || e.isComposing || e.repeat) return;
     if (/^(INPUT|TEXTAREA|SELECT)$/.test(e.target.tagName) || e.target.isContentEditable) return;
     if (document.querySelector('.overlay.show:not(#overlay)')) return;
+    if (document.querySelector('.login-screen:not(.out):not([hidden])')) return; // still on the login screen
     e.preventDefault();
     setOpen(true);
     input.focus();

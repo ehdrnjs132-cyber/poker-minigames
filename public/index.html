@@ -13,6 +13,29 @@
 </head>
 <body>
   <canvas id="bg" aria-hidden="true"></canvas>
+  <!-- ===== LOGIN (first screen) ===== -->
+  <div id="loginScreen" class="login-screen loading" role="dialog" aria-modal="true" aria-labelledby="loginTitle">
+    <div class="login-card">
+      <div class="login-logo" aria-hidden="true">♠</div>
+      <h1 id="loginTitle">HOLDEM ARCADE</h1>
+      <p class="login-tag" data-i18n="tagline">친구들과 함께하는 포커 룰 미니게임</p>
+      <div class="login-spin dots" data-i18n="login.loading">불러오는 중</div>
+      <div class="login-body">
+        <div class="login-google" id="loginGoogle" hidden>
+          <div id="loginGBtn"></div>
+          <p class="login-note" data-i18n="login.googleNote">구글로 로그인하면 어느 기기에서든 기록과 랭킹이 이어져요</p>
+          <div class="login-or"><span data-i18n="login.or">또는</span></div>
+        </div>
+        <label class="field login-field"><span data-i18n="nick.label">닉네임</span>
+          <input id="loginName" maxlength="12" autocomplete="nickname" placeholder="닉네임을 입력하세요" data-i18n-ph="nick.ph" />
+        </label>
+        <button class="btn gold big login-guest" id="loginGuest" data-i18n="login.guest">게스트로 시작</button>
+        <p class="login-note small" data-i18n="login.guestNote">게스트 기록은 이 브라우저에만 남아요</p>
+      </div>
+      <button class="lang-toggle login-lang">EN</button>
+    </div>
+  </div>
+
   <!-- ===== LOBBY: tap bar on top, walkable plaza below ===== -->
   <main id="lobby" class="screen active">
     <header class="ltop">

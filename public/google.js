@@ -16,6 +16,8 @@
       if (!cfg.googleClientId) return;
       clientId = cfg.googleClientId;
       row.hidden = false;
+      const lg = document.getElementById('loginGoogle');
+      if (lg) lg.hidden = false;
       const s = document.createElement('script');
       s.src = 'https://accounts.google.com/gsi/client';
       s.async = true;
@@ -28,8 +30,16 @@
     })
     .catch(() => {});
 
+  function renderLoginButton() {
+    const b = document.getElementById('loginGBtn');
+    if (!b || !gisReady || b._rendered) return;
+    b._rendered = true;
+    google.accounts.id.renderButton(b, { theme: 'filled_blue', size: 'large', shape: 'pill', text: 'continue_with', width: 280, locale: I18N.lang === 'ko' ? 'ko' : 'en' });
+  }
+
   function render() {
     if (!clientId) return;
+    renderLoginButton();
     const me = HA.profile();
     const status = $('#gStatus');
     const btn = $('#gBtn');
@@ -55,7 +65,7 @@
       toast(res.switched ? t('me.googleSwitched') : t('me.googleLinked'), 3000);
       // Another profile opened: reload so rooms, plaza and names all use it.
       if (res.switched) setTimeout(() => location.reload(), 900);
-      else render();
+      else { render(); HA.loginDone?.(); }
     });
   }
 
@@ -69,5 +79,8 @@
 
   // Refresh the row whenever the settings panel opens or the language changes.
   $('#setBtn')?.addEventListener('click', () => setTimeout(render, 50));
-  I18N.onChange(() => { const b = $('#gBtn'); if (b) { b._rendered = false; b.innerHTML = ''; } render(); });
+  I18N.onChange(() => {
+    for (const id of ['gBtn', 'loginGBtn']) { const b = document.getElementById(id); if (b) { b._rendered = false; b.innerHTML = ''; } }
+    render();
+  });
 })();

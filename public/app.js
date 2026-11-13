@@ -94,6 +94,7 @@
     avatarInner: (p) => avatarInner(p),
     colorFor: (id) => colorFor(id),
     createGame: (id) => createGame(id),
+    loginDone: () => finishLogin(),
     state: () => S,
     join: (code) => join(code),
     myName: () => nameInput.value.trim() || ME?.name || pref.get('name') || '',
@@ -105,12 +106,47 @@
     if (el && ME) el.innerHTML = avatarInner({ ...ME, uid: ME.id });
     $('#topName').textContent = nameInput.value.trim() || ME?.name || 'Player';
   }
+  // ---- login gate: Google users go straight in, guests confirm a nickname
+  let loggedIn = false;
+  const afterLogin = [];
+  function whenLoggedIn(fn) { if (loggedIn) fn(); else afterLogin.push(fn); }
+  function finishLogin() {
+    if (loggedIn) return;
+    loggedIn = true;
+    $('#loginScreen').classList.add('out');
+    setTimeout(() => $('#loginScreen').hidden = true, 450);
+    renderNavMe();
+    while (afterLogin.length) afterLogin.shift()();
+  }
+  function showLogin() {
+    if (loggedIn) return;
+    const ls = $('#loginScreen');
+    ls.classList.remove('loading');
+    const ln = $('#loginName');
+    if (!ln.value) ln.value = pref.get('name') || (ME?.name && ME.name !== 'Player' ? ME.name : '');
+  }
+  $('#loginGuest').addEventListener('click', () => {
+    const n = $('#loginName').value.trim().slice(0, 12);
+    if (!n) { toast(t('err.nick')); return $('#loginName').focus(); }
+    nameInput.value = n;
+    getName();
+    SFX.click();
+    finishLogin();
+  });
+  $('#loginName').addEventListener('keydown', (e) => { if (e.key === 'Enter') $('#loginGuest').click(); });
+
   function hello() {
     socket.emit('hello', { uid: pref.get('uid'), token: pref.get('utok'), name: pref.get('name') }, (res) => {
       if (!res?.ok) return;
       pref.set('uid', res.uid);
       pref.set('utok', res.token);
       ME = res.user;
+      if (!loggedIn) {
+        if (ME.google) {
+          if (!nameInput.value && ME.name) { nameInput.value = ME.name; pref.set('name', ME.name); }
+          finishLogin();
+        } else showLogin();
+      }
       if (!nameInput.value && ME.name && ME.name !== 'Player') nameInput.value = ME.name;
       renderNavMe();
     });
@@ -347,7 +383,8 @@
     $('#netState').classList.remove('show');
     hello(); // first, so rooms see who we are
     const s = session.get();
-    if (!s) return handleInvite();
+    if (!s) return whenLoggedIn(handleInvite);
+    finishLogin(); // back into a room after a reload: no login screen mid-game
     socket.emit('join', { code: s.code, playerId: s.playerId, name: pref.get('name') }, (res) => {
       if (!res?.ok) {
         session.clear();
