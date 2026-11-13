@@ -1,7 +1,7 @@
-// In-room avatars: every seated player walks around the room screen.
-// Arrow keys / WASD (or the joystick on touch screens) move, Space / ⚔ swings
-// the sword. Swinging at someone close asks "challenge to a duel?"; if they
-// accept, duel.js runs the fight. Also: tomato coupons and the red screen.
+// In-room avatars: every seated player walks around the room screen with an
+// HP bar. Arrow keys / WASD (or the joystick on touch screens) move, Space / ⚔
+// swings the sword and hits whoever is close, right on the game screen. HP 0
+// = knocked out for a few seconds. Also: tomato coupons and the red screen.
 (() => {
   const { socket, esc, toast } = window.HA;
   const t = (k, v) => I18N.t(k, v);
@@ -23,7 +23,7 @@
   document.body.appendChild(ui);
 
   // ---------------------------------------------------------------- avatars
-  const me = { x: 0.5, y: 0.82, d: 1, m: false, sw: 0 };
+  const me = { x: 0.5, y: 0.82, d: 1, m: false, sw: 0, hp: 100, dead: false, respawnAt: 0 };
   let placed = false;
   const others = new Map(); // id -> {el,x,y,tx,ty,d,m,sw}
   let myEl = null;
@@ -35,7 +35,9 @@
         <i class="rc-foot l"></i><i class="rc-foot r"></i>
         <div class="rc-sword"><i class="blade"></i><i class="hilt"></i></div>
       </div>
-      <div class="rc-name">${esc(p.name || '')}</div>`;
+      <div class="rc-name">${esc(p.name || '')}</div>
+      <div class="rc-hp"><i></i></div>
+      <div class="rc-ko"></div>`;
   }
   const sig = (p) => `${p.name}|${p.avatar}|${p.avatarV}|${p.uid}|${p.bot}`;
   function ensureEl(p, mine) {
@@ -50,6 +52,17 @@
     return el;
   }
   const px = (x, y) => [x * innerWidth, (0.1 + y * 0.86) * innerHeight];
+  function setHp(el, hp, dead, respawnAt) {
+    const bar = el.querySelector('.rc-hp i');
+    if (bar) {
+      const v = Math.max(0, Math.min(100, hp ?? 100));
+      bar.style.width = `${v}%`;
+      bar.className = v <= 30 ? 'low' : v <= 60 ? 'mid' : '';
+    }
+    el.classList.toggle('dead', !!dead);
+    const ko = el.querySelector('.rc-ko');
+    if (ko) ko.textContent = dead && respawnAt ? `💫 ${Math.max(0, Math.ceil((respawnAt - Date.now()) / 1000))}` : '';
+  }
   function place(el, x, y, d, m) {
     const [X, Y] = px(x, y);
     el.style.transform = `translate(${X}px, ${Y}px)`;
@@ -69,7 +82,7 @@
     if (!S) return;
     const seen = new Set();
     for (const r of list || []) {
-      if (r.id === S.me) continue;
+      if (r.id === S.me) { me.hp = r.hp; me.dead = r.dead; me.respawnAt = r.respawnAt; continue; }
       const p = S.players.find((q) => q.id === r.id);
       if (!p) continue;
       seen.add(r.id);
@@ -77,7 +90,7 @@
       if (!o) { o = { x: r.x, y: r.y, sw: r.sw }; others.set(r.id, o); }
       o.el = ensureEl(p, false);
       if (r.sw && r.sw !== o.sw) swing(o.el);
-      Object.assign(o, { tx: r.x, ty: r.y, d: r.d, m: r.m, sw: r.sw });
+      Object.assign(o, { tx: r.x, ty: r.y, d: r.d, m: r.m, sw: r.sw, hp: r.hp, dead: r.dead, respawnAt: r.respawnAt });
     }
     for (const [id, o] of others) if (!seen.has(id)) { o.el?.remove(); others.delete(id); }
   });
@@ -86,7 +99,7 @@
   const keys = new Set();
   const KEYMAP = { ArrowUp: 'u', KeyW: 'u', ArrowDown: 'd', KeyS: 'd', ArrowLeft: 'l', KeyA: 'l', ArrowRight: 'r', KeyD: 'r' };
   const typing = (e) => /^(INPUT|TEXTAREA|SELECT)$/.test(e.target.tagName) || e.target.isContentEditable;
-  const blocked = () => !!document.querySelector('.overlay.show, .duel-stage.show, .roam-modal.show');
+  const blocked = () => !!document.querySelector('.overlay.show');
   const active = () => {
     const S = state();
     return inRoom() && S && !S.spectator && S.players.some((p) => p.id === S.me);
@@ -125,6 +138,7 @@
   // ---------------------------------------------------------------- swing -> challenge
   let lastSwing = 0;
   function doSwing() {
+    if (me.dead) return;
     const now = Date.now();
     if (now - lastSwing < 400) return;
     lastSwing = now;
@@ -143,54 +157,48 @@
       const dist = Math.hypot(dx, dy);
       if (!best || dist < best.dist) best = { id, dist };
     }
-    if (best) askChallenge(best.id);
+    // Send where I stand and which way I face first, so the server judges the
+    // hit on up-to-date positions (moves are otherwise sent ~10x a second).
+    socket.emit('roam:move', { x: me.x, y: me.y, d: me.d, m: me.m, sw: me.sw });
+    if (best) socket.emit('roam:hit', { target: best.id });
   }
 
-  const modal = document.createElement('div');
-  modal.className = 'roam-modal';
-  document.body.appendChild(modal);
-  let modalTimer = null;
-  function openModal(html) {
-    modal.innerHTML = `<div class="rm-card">${html}</div>`;
-    modal.classList.add('show');
+  // ---------------------------------------------------------------- hits
+  const elOf = (id) => (id === state()?.me ? myEl : others.get(id)?.el);
+  function floatAt(el, text, cls) {
+    if (!el) return;
+    const rc = el.getBoundingClientRect();
+    const f = document.createElement('div');
+    f.className = `rc-float ${cls || ''}`;
+    f.textContent = text;
+    f.style.left = `${rc.left}px`;
+    f.style.top = `${rc.top - 70}px`;
+    document.body.appendChild(f);
+    setTimeout(() => f.remove(), 900);
   }
-  function closeModal() { modal.classList.remove('show'); clearInterval(modalTimer); }
-  modal.addEventListener('click', (e) => {
-    const b = e.target.closest('[data-rm]');
-    if (!b) return;
-    const a = b.dataset.rm;
-    if (a === 'challenge') {
-      socket.emit('duel:challenge', { target: b.dataset.id }, (res) => {
-        if (!res?.ok) return toast(t(res?.code || 'duel.busy'));
-        openModal(`<div class="rm-ico">⚔️</div><h3>${t('duel.waiting')}</h3><p class="dots">${t('duel.waitingSub')}</p>`);
-      });
-      window.SFX && SFX.click();
-      return;
+  socket.on('roam:hp', (m) => {
+    const S = state();
+    if (!S) return;
+    const mine = m.id === S.me;
+    if (mine) { me.hp = m.hp; me.dead = !!m.ko || (me.dead && !m.respawn); if (m.respawn) me.dead = false; if (m.ko) me.respawnAt = m.respawnAt; }
+    else { const o = others.get(m.id); if (o) { o.hp = m.hp; if (m.ko) { o.dead = true; o.respawnAt = m.respawnAt; } if (m.respawn) o.dead = false; } }
+    const el = elOf(m.id);
+    if (m.respawn) { floatAt(el, '✨', 'heal'); return; }
+    if (!m.dmg) return;
+    floatAt(el, `-${m.dmg}${m.crit ? '!' : ''}`, m.crit ? 'crit' : '');
+    if (el) { el.classList.remove('hit'); void el.offsetWidth; el.classList.add('hit'); }
+    window.SFX && SFX.lose();
+    if (mine) {
+      me.x = Math.max(0.03, Math.min(0.97, me.x + (m.dir || 1) * 0.025));
+      document.body.classList.remove('roam-hurt'); void document.body.offsetWidth; document.body.classList.add('roam-hurt');
+      if (navigator.vibrate) navigator.vibrate(m.ko ? [150, 60, 250] : 60);
+      if (m.ko) toast(t('roam.dead', { n: Math.round((m.respawnAt - Date.now()) / 1000) || 8 }), 3000);
     }
-    if (a === 'accept' || a === 'decline') socket.emit('duel:answer', { accept: a === 'accept' });
-    closeModal();
+    if (m.ko) {
+      floatAt(el, 'K.O.!', 'ko');
+      if (m.by === S.me) { window.SFX && SFX.fanfare(); toast(t('roam.youKo'), 2600); }
+    }
   });
-
-  function nameOf(id) { return state()?.players.find((p) => p.id === id)?.name || ''; }
-  function askChallenge(id) {
-    if (state()?.duel) return toast(t('duel.busy'));
-    openModal(`<div class="rm-ico">🗡️</div><h3>${t('duel.askTitle', { name: esc(nameOf(id)) })}</h3>
-      <p>${t('duel.askSub')}</p>
-      <div class="rm-btns"><button class="btn ghost" data-rm="cancel">${t('cancel')}</button><button class="btn gold big" data-rm="challenge" data-id="${id}">${t('duel.send')}</button></div>`);
-  }
-  socket.on('duel:ask', ({ name, until, now }) => {
-    const end = Date.now() + (until - now);
-    openModal(`<div class="rm-ico shake">⚔️</div><h3>${t('duel.incoming', { name: esc(name) })}</h3>
-      <p>${t('duel.incomingSub')}</p><div class="rm-count" id="rmCount"></div>
-      <div class="rm-btns"><button class="btn ghost" data-rm="decline">${t('duel.decline')}</button><button class="btn gold big" data-rm="accept">${t('duel.accept')}</button></div>`);
-    window.SFX && SFX.spotlight();
-    const tickc = () => { const el = $('#rmCount'); if (el) el.textContent = Math.max(0, Math.ceil((end - Date.now()) / 1000)); };
-    tickc();
-    modalTimer = setInterval(tickc, 250);
-  });
-  socket.on('duel:askClose', closeModal);
-  socket.on('duel:declined', ({ name, timeout }) => { closeModal(); toast(t(timeout ? 'duel.timeout' : 'duel.declined', { name })); });
-  socket.on('duel:start', () => closeModal());
 
   // ---------------------------------------------------------------- coupons + red screen
   const couponBtn = $('#couponBtn');
@@ -237,7 +245,7 @@
     const S = state();
     const on = active();
     layer.classList.toggle('show', !!S && inRoom());
-    ui.classList.toggle('show', on && !S?.duel);
+    ui.classList.toggle('show', on);
     couponBtn.classList.toggle('show', on && (S?.myCoupons || 0) > 0);
     $('#couponN').textContent = S?.myCoupons || 0;
     if (!S || !inRoom()) { layer.innerHTML = ''; others.clear(); myEl = null; placed = false; return; }
@@ -250,7 +258,7 @@
       let vy = (keys.has('d') ? 1 : 0) - (keys.has('u') ? 1 : 0);
       if (joyVec) { vx = joyVec.x; vy = joyVec.y; }
       const len = Math.hypot(vx, vy);
-      me.m = len > 0.1 && !blocked() && !S.duel;
+      me.m = len > 0.1 && !blocked() && !me.dead;
       if (me.m) {
         const sp = 0.32; // screen widths per second
         me.x = Math.max(0.03, Math.min(0.97, me.x + (vx / Math.max(1, len)) * sp * dt * (innerHeight / innerWidth) * 1.4));
@@ -258,6 +266,7 @@
         if (Math.abs(vx) > 0.1) me.d = vx < 0 ? -1 : 1;
       }
       place(myEl, me.x, me.y, me.d, me.m);
+      setHp(myEl, me.hp, me.dead, me.respawnAt);
       const key = `${me.x.toFixed(3)},${me.y.toFixed(3)},${me.d},${me.m},${me.sw}`;
       if ((key !== lastKey && now - lastSend > 90) || sendNow || now - lastSend > 2000) {
         socket.emit('roam:move', { x: me.x, y: me.y, d: me.d, m: me.m, sw: me.sw });
@@ -268,7 +277,7 @@
     for (const o of others.values()) {
       o.x += (o.tx - o.x) * a;
       o.y += (o.ty - o.y) * a;
-      if (o.el) place(o.el, o.x, o.y, o.d, o.m);
+      if (o.el) { place(o.el, o.x, o.y, o.d, o.m); setHp(o.el, o.hp, o.dead, o.respawnAt); }
     }
   }
   requestAnimationFrame(frame);

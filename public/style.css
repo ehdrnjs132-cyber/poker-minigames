@@ -1475,57 +1475,14 @@ body.coupon-aim .iseat:not(.me):not(.empty), body.coupon-aim #opps .seat:not(.em
 body.chat-open .roam-ui, body.dueling .roam-ui { display: none !important; }
 @media (max-width: 560px) { .sword-btn { right: 134px; width: 50px; height: 50px; } .coupon-btn { right: 192px; height: 50px; } }
 
-/* challenge / accept modal */
-.roam-modal { position: fixed; inset: 0; z-index: 60; display: none; place-items: center; background: rgba(2, 6, 20, .55); }
-.roam-modal.show { display: grid; }
-.rm-card { width: min(360px, calc(100vw - 32px)); padding: 22px 20px 18px; border-radius: 20px; text-align: center; background: linear-gradient(180deg, #1b3270, #0a1638); border: 3px solid var(--gold); box-shadow: 0 20px 50px rgba(0, 0, 0, .6); animation: ttIn .25s cubic-bezier(.2, 1.4, .4, 1); }
-.rm-ico { font-size: 3rem; }
-.rm-ico.shake { animation: cbPanic .2s linear infinite; }
-.rm-card h3 { margin: 6px 0; font-family: var(--display); font-weight: 400; font-size: 1.35rem; color: #fff; }
-.rm-card p { margin: 0 0 12px; color: var(--muted); font-size: .9rem; }
-.rm-count { font-family: var(--num); font-size: 2rem; color: var(--gold-hi); margin-bottom: 8px; }
-.rm-btns { display: flex; gap: 10px; justify-content: center; }
-
 /* tomato coupon hit: translucent red, never fully hiding the screen */
-.red-screen { position: fixed; inset: 0; z-index: 70; pointer-events: none; background: rgba(220, 20, 40, .38); animation: rsIn .25s ease-out; transition: opacity .6s; display: grid; place-items: center; }
+.red-screen { position: fixed; inset: 0; z-index: 70; pointer-events: none; background: rgba(190, 10, 30, .58); animation: rsIn .25s ease-out; transition: opacity .6s; display: grid; place-items: center; }
 .red-screen.out { opacity: 0; }
 .red-screen b { padding: 8px 16px; border-radius: 999px; background: rgba(0, 0, 0, .35); color: #fff; font-size: 1.1rem; animation: tPop 2.4s both; }
-.rs-drip { position: absolute; top: 0; width: 26px; border-radius: 0 0 14px 14px; background: rgba(200, 10, 30, .55); animation: rsDrip 4s ease-in forwards; }
+.rs-drip { position: absolute; top: 0; width: 30px; border-radius: 0 0 16px 16px; background: rgba(150, 0, 20, .7); animation: rsDrip 6.5s ease-in forwards; }
 .rs-drip.d1 { left: 14%; } .rs-drip.d2 { left: 48%; animation-delay: .3s; width: 34px; } .rs-drip.d3 { left: 80%; animation-delay: .15s; }
-@keyframes rsIn { from { background: rgba(255, 40, 60, .7); } }
+@keyframes rsIn { from { background: rgba(230, 20, 40, .8); } }
 @keyframes rsDrip { from { height: 0; } to { height: 70%; } }
-
-/* duel arena */
-.duel-stage { position: fixed; inset: 0; z-index: 65; display: none; flex-direction: column; background: radial-gradient(ellipse at 50% 40%, #2a1660, #07051a 80%); }
-.duel-stage.show { display: flex; }
-.ds-hud { display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; gap: 12px; padding: 10px 16px; padding-top: max(10px, env(safe-area-inset-top)); }
-.ds-side b { display: block; color: #fff; font-weight: 900; font-size: .95rem; margin-bottom: 4px; }
-.ds-side.opp { text-align: right; }
-.ds-bar { height: 16px; border-radius: 999px; background: rgba(255, 255, 255, .12); border: 2px solid rgba(255, 255, 255, .5); overflow: hidden; }
-.ds-bar i { display: block; height: 100%; width: 100%; background: linear-gradient(90deg, #ff4d6d, #ffd34d); transition: width .25s; }
-.ds-side.opp .ds-bar i { margin-left: auto; background: linear-gradient(90deg, #ffd34d, #ff4d6d); }
-.ds-timer { font-family: var(--num); font-size: 2rem; color: var(--gold-hi); min-width: 56px; text-align: center; text-shadow: 0 3px 0 rgba(0, 0, 0, .4); }
-.ds-canvas { flex: 1; min-height: 0; position: relative; }
-.ds-canvas canvas { display: block; }
-.ds-msg { position: absolute; left: 50%; top: 42%; transform: translate(-50%, -50%) scale(.6); opacity: 0; text-align: center; pointer-events: none; transition: transform .35s cubic-bezier(.2, 1.6, .4, 1), opacity .25s; }
-.ds-msg.show { opacity: 1; transform: translate(-50%, -50%) scale(1); }
-.ds-msg b { display: block; font-family: var(--display); font-size: 4.2rem; color: #fff; -webkit-text-stroke: 3px #3a2306; text-shadow: 0 6px 0 rgba(0, 0, 0, .4); }
-.ds-msg.win b { color: #ffd34d; } .ds-msg.lose b { color: #9fb0d8; }
-.ds-msg span { display: inline-block; margin-top: 6px; padding: 6px 14px; border-radius: 999px; background: rgba(227, 40, 58, .85); color: #fff; font-weight: 900; }
-.ds-help { text-align: center; color: rgba(255, 255, 255, .6); font-size: .8rem; padding: 4px; }
-.ds-pad { display: none; justify-content: space-between; padding: 8px 14px max(14px, env(safe-area-inset-bottom)); gap: 10px; }
-@media (pointer: coarse) { .ds-pad { display: flex; } }
-.ds-pad button { width: 64px; height: 64px; border-radius: 50%; border: 2px solid rgba(255, 255, 255, .5); background: rgba(255, 255, 255, .12); color: #fff; font-size: 1.6rem; touch-action: none; user-select: none; }
-.ds-pad button.on { background: rgba(245, 196, 81, .45); }
-.ds-pad .atk { width: 76px; height: 76px; background: rgba(227, 40, 58, .55); }
-.ds-move, .ds-acts { display: flex; gap: 10px; align-items: center; }
-.duel-banner { position: fixed; left: 50%; top: 64px; transform: translateX(-50%); z-index: 50; display: none; align-items: center; gap: 10px; padding: 8px 16px; border-radius: 999px;
-  background: rgba(10, 6, 40, .92); border: 2px solid var(--gold); box-shadow: 0 10px 30px rgba(0, 0, 0, .5); color: #fff; flex-wrap: wrap; justify-content: center; max-width: calc(100vw - 24px); }
-.duel-banner.show { display: flex; }
-.duel-banner small { width: 100%; text-align: center; color: var(--gold); font-weight: 800; font-size: .72rem; }
-.db-bars { display: flex; align-items: center; gap: 6px; }
-.db-bars .ds-bar { width: 90px; height: 10px; }
-.db-bars span { font-weight: 900; color: var(--gold); font-size: .8rem; }
 
 /* ================= Pinocchio Liar's Cards ================= */
 #room:not(.game-liar) #liarTable { display: none; }
@@ -1633,3 +1590,31 @@ body.chat-open .roam-ui, body.dueling .roam-ui { display: none !important; }
 .login-field { text-align: left; margin-top: 6px; }
 .login-guest { width: 100%; margin-top: 10px; }
 .login-lang { position: absolute; top: 12px; right: 12px; }
+
+/* in-room fights: HP bars, hits, knock-outs */
+.rc-hp { position: absolute; left: 0; top: -80px; width: 44px; height: 6px; margin-left: -22px; border-radius: 999px; background: rgba(0, 0, 0, .55); border: 1px solid rgba(255, 255, 255, .6); overflow: hidden; }
+.rc-hp i { display: block; height: 100%; width: 100%; background: linear-gradient(90deg, #43d17a, #8dff6a); transition: width .2s; }
+.rc-hp i.mid { background: linear-gradient(90deg, #f5c451, #ffe28a); }
+.rc-hp i.low { background: linear-gradient(90deg, #ff4d6d, #ff8a99); }
+.rc.mine .rc-hp { border-color: var(--gold); }
+.rc-ko { position: absolute; left: 0; top: -96px; transform: translateX(-50%); font-size: .8rem; font-weight: 900; color: #fff; white-space: nowrap; text-shadow: 0 1px 3px #000; }
+.rc.hit .rc-head, .rc.hit .rc-body { animation: rcHit .35s; }
+@keyframes rcHit { 0% { filter: brightness(2) saturate(0) sepia(1) hue-rotate(-50deg) saturate(6); } 50% { transform: translateX(4px); } 100% { filter: none; } }
+.rc.dead .rc-body { transform: rotate(90deg) translate(8px, -6px) !important; animation: none !important; filter: grayscale(1) brightness(.7); }
+.rc.dead .rc-head { filter: grayscale(1) brightness(.8); }
+.rc.dead .rc-sword { opacity: .3; }
+.rc.dead .rc-hp { opacity: .4; }
+.rc-float { position: fixed; z-index: 47; pointer-events: none; transform: translateX(-50%); font-family: var(--display); font-size: 1.4rem; color: #ff6b7a; -webkit-text-stroke: 1.5px #3a0410; animation: rcFloat .9s ease-out forwards; }
+.rc-float.crit { color: #ffd34d; font-size: 1.7rem; }
+.rc-float.ko { color: #fff; font-size: 2rem; -webkit-text-stroke: 2px #c81d2e; }
+.rc-float.heal { color: #8dff6a; }
+@keyframes rcFloat { from { opacity: 1; transform: translate(-50%, 0) scale(.7); } 20% { transform: translate(-50%, -10px) scale(1.15); } to { opacity: 0; transform: translate(-50%, -48px) scale(1); } }
+body.roam-hurt::after { content: ''; position: fixed; inset: 0; z-index: 69; pointer-events: none; box-shadow: inset 0 0 90px rgba(255, 30, 50, .65); animation: hurtFlash .45s ease-out forwards; }
+@keyframes hurtFlash { from { opacity: 1; } to { opacity: 0; } }
+/* aiming a tomato/taunt: walking avatars and table seats are both tappable */
+body.taunt-aim .roam-layer { pointer-events: auto; }
+body.taunt-aim .rc { pointer-events: auto; cursor: crosshair; }
+body.taunt-aim .rc:not(.mine) .rc-head, body.coupon-aim .rc:not(.mine) .rc-head { outline: 3px dashed #ff4d6d; outline-offset: 3px; animation: aimPulse .8s ease-in-out infinite; }
+body.coupon-aim .iseat:not(.me):not(.empty) .is-avatar, body.taunt-aim .iseat:not(.me):not(.empty) .is-avatar { box-shadow: 0 0 0 4px rgba(255, 77, 109, .9), 0 0 22px rgba(255, 77, 109, .8); }
+.rc { width: 0; height: 0; }
+body.taunt-aim .rc::before, body.coupon-aim .rc::before { content: ''; position: absolute; left: -26px; top: -76px; width: 52px; height: 84px; }

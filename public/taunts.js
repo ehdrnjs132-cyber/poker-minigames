@@ -77,8 +77,9 @@
   // Aiming: tap an opponent's seat.
   document.addEventListener('click', (e) => {
     if (!aiming) return;
-    const seat = e.target.closest('.iseat[data-id], .seat[data-id]');
-    if (!seat || seat.classList.contains('me') || seat.id === 'seatMe' || seat.dataset.id === 'empty' || seat.dataset.id.startsWith('empty')) return;
+    // a seat on the card table or a walking avatar both work as targets
+    const seat = e.target.closest('.iseat[data-id], .seat[data-id], .rc[data-id]');
+    if (!seat || seat.classList.contains('me') || seat.classList.contains('mine') || seat.id === 'seatMe' || seat.dataset.id === 'empty' || seat.dataset.id.startsWith('empty')) return;
     e.stopPropagation();
     socket.emit('taunt', { kind: aiming, target: seat.dataset.id });
     stopAim();
