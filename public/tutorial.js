@@ -83,7 +83,7 @@ const Tutorial = (() => {
     {
       games: ['memory'],
       title: { ko: "위치를 보고 2장 선택", en: "Pick 2 cards by position" },
-      text: { ko: "뒤집힌 카드 중 <b>2장을 눌러 고르고 \"선택 확정\"</b>을 누르세요. 상대가 뭘 골랐는지는 쇼다운 전까지 보이지 않아요. 상대와 <b>같은 카드를 골라도 괜찮고</b>, 시간 안에 못 고르면 랜덤으로 정해집니다.", en: "Tap <b>2 face-down cards, then press \"Lock in\"</b>. You can't see your opponent's picks until the showdown. <b>Picking the same card as your opponent is fine</b>, and if time runs out your picks are random." },
+      text: { ko: "뒤집힌 카드 중 <b>2장을 눌러 고르고 \"선택 확정\"</b>을 누르세요. 상대가 뭘 골랐는지는 쇼다운 전까지 보이지 않아요. 상대와 <b>같은 카드를 골라도 괜찮고</b>, <b>시간 안에 2장을 고르지 못하면 그 판은 실격패</b>(참가비를 잃어요)입니다.", en: "Tap <b>2 face-down cards, then press \"Lock in\"</b>. You can't see your opponent's picks until the showdown. <b>Picking the same card as your opponent is fine</b>, and <b>if you don't pick 2 in time, you're disqualified for that round</b> (you lose your ante)." },
       html: () => `<div class="tut-felt">${boardHTML()}${gridHTML(true)}<div class="tut-pointer"></div></div>`,
       play() {
         const cards = stageCards('.tut-grid .card');

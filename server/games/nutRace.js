@@ -38,7 +38,7 @@ class NutRace extends MemoryPoker {
   extraResult(hands) {
     const nuts = Bots.rankPairs(this.grid, this.board)[0];
     // Who found a nuts-strength hand (several pairs can be equally strong).
-    const hitters = hands.filter((h) => compareScores(h.score, nuts.score) === 0).map((h) => h.id);
+    const hitters = hands.filter((h) => h.score && compareScores(h.score, nuts.score) === 0).map((h) => h.id);
     return { nuts: { picks: nuts.picks, score: nuts.score }, hitters };
   }
 

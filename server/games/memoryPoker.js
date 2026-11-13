@@ -195,6 +195,7 @@ class MemoryPoker {
     s.lastAction = null;
     s.penalty = 0;
     s.botConfidence = null;
+    s.dq = false;
   }
 
   onJoin(player) {
@@ -305,8 +306,8 @@ class MemoryPoker {
       s.acted = false;
       s.lastAction = null;
     }
-    // Everyone all-in already: nothing to bet.
-    if (!this.activePlayers().some((p) => this.canAct(p))) return this.betDone();
+    // Nobody to bet against (others disqualified) or everyone all-in: skip.
+    if (this.inHand().length <= 1 || !this.activePlayers().some((p) => this.canAct(p))) return this.betDone();
     this.startTurn(this.players[this.nextIndex(this.dealerIdx, (p) => this.canAct(p))].id);
   }
 
@@ -574,20 +575,23 @@ class MemoryPoker {
     this.setPhase('pick', this.pickMs, () => this.afterPick());
   }
 
-  // Fill in random picks for anyone who didn't finish (no lock time for them).
-  autoPick(players) {
+  // Time's up: anyone without 2 picks is disqualified for this round (no random
+  // picks). They're out of the hand like a fold and lose their ante. Two picks
+  // that weren't locked still count (Nut Race treats them as the slowest).
+  disqualifyUnpicked(players) {
     for (const p of players) {
       const s = this.ps.get(p.id);
-      while (s.picks.length < CFG.picks) {
-        const i = crypto.randomInt(CFG.gridSize);
-        if (!s.picks.includes(i)) s.picks.push(i);
+      if (s.folded) continue;
+      if (s.picks.length < CFG.picks) {
+        s.dq = true;
+        s.folded = true;
       }
       s.locked = true;
     }
   }
 
   afterPick() {
-    this.autoPick(this.activePlayers());
+    this.disqualifyUnpicked(this.activePlayers());
     if (this.bettingOn()) this.startBetting();
     else this.showdown();
   }
@@ -595,32 +599,39 @@ class MemoryPoker {
   showdown() {
     this.turnId = null;
     const active = this.activePlayers();
-    this.autoPick(active);
+    this.disqualifyUnpicked(active);
     const hands = active.map((p) => {
       const s = this.ps.get(p.id);
       const cards = s.picks.map((i) => this.grid[i]);
+      if (s.dq) return { id: p.id, picks: s.picks.slice(), cards, score: null, best: [], lockedAt: null, folded: true, dq: true, bet: s.bet };
       const bh = bestHand([...cards, ...this.board]);
       return { id: p.id, picks: s.picks.slice(), cards, score: bh.score, best: bh.cards, lockedAt: s.lockedAt, folded: s.folded, bet: s.bet };
     });
 
     const live = hands.filter((h) => !h.folded);
-    const winners = live.length === 1 ? [live[0].id] : this.pickWinners(live);
-    const share = Math.floor(this.pot / winners.length);
-    let remainder = this.pot - share * winners.length;
-    for (const id of winners) {
-      const s = this.ps.get(id);
-      s.chips += share + (remainder > 0 ? 1 : 0);
-      remainder--;
+    // Everyone disqualified: nobody wins, antes go back.
+    const voided = live.length === 0;
+    const winners = voided ? [] : live.length === 1 ? [live[0].id] : this.pickWinners(live);
+    const share = voided ? 0 : Math.floor(this.pot / winners.length);
+    if (voided) {
+      for (const h of hands) this.ps.get(h.id).chips += this.ante + h.bet;
+    } else {
+      let remainder = this.pot - share * winners.length;
+      for (const id of winners) {
+        const s = this.ps.get(id);
+        s.chips += share + (remainder > 0 ? 1 : 0);
+        remainder--;
+      }
     }
 
     const willEnd = this.isGameOver();
     this.result = {
       hands, winners, pot: this.pot, share, ante: this.ante,
-      uncontested: live.length === 1 && hands.length > 1, final: willEnd, ...this.extraResult(hands),
+      uncontested: live.length === 1 && hands.length > 1, voided, final: willEnd, ...this.extraResult(hands),
     };
     this.room.onRound?.(hands.map((h) => ({
       id: h.id, won: winners.includes(h.id), score: h.folded ? null : h.score,
-      net: (winners.includes(h.id) ? share : 0) - this.ante - h.bet,
+      net: voided ? 0 : (winners.includes(h.id) ? share : 0) - this.ante - h.bet,
     })), this.constructor.meta.id);
     this.pot = 0;
     this.setPhase('showdown', CFG.showdownMs, () => this.afterShowdown());
@@ -667,7 +678,7 @@ class MemoryPoker {
   }
 
   playerBetView(s) {
-    return { folded: s.folded, bet: s.bet, lastAction: s.lastAction, penalty: s.penalty };
+    return { folded: s.folded, dq: !!s.dq, bet: s.bet, lastAction: s.lastAction, penalty: s.penalty };
   }
 
   viewFor(viewerId) {

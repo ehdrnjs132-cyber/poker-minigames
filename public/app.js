@@ -487,10 +487,11 @@
     else if (ph === 'lobby' || ph === 'gameover') badge = p.ready ? `<span class="badge ok">${t('badge.ready')}</span>` : `<span class="badge">${t('badge.wait')}</span>`;
     else if (ph === 'memorize') badge = p.memorized ? `<span class="badge ok">${t('badge.memorized')}</span>` : `<span class="badge">${t('badge.memorizing')}</span>`;
     else if (ph === 'pick') badge = p.locked ? `<span class="badge ok">${t('badge.locked')}</span>` : `<span class="badge">${t('badge.picking', { n: p.pickCount })}</span>`;
+    else if (p.dq && (ph === 'bet' || ph === 'showdown')) badge = `<span class="badge warn">${t('badge.dq')}</span>`;
     else if (ph === 'bet') {
       if (turn) badge = `<span class="badge think dots">${t('ip.thinking')}</span>`;
       else if (p.lastAction) badge = `<span class="badge ${p.folded ? 'warn' : 'ok'}">${actionLabel(p.lastAction)}</span>`;
-    } else if (hand?.folded) badge = `<span class="badge warn">${t('ip.fold')}</span>`;
+    } else if (hand?.folded) badge = `<span class="badge warn">${hand.dq ? t('badge.dq') : t('ip.fold')}</span>`;
     else if (hand) {
       badge = `<span class="badge hand">${esc(I18N.hand(hand.score))}</span>`;
       if (S.game === 'nut') {
@@ -514,7 +515,9 @@
     let hole = '';
     for (let k = 0; k < 2; k++) {
       const idx = p.picks ? p.picks[k] : undefined;
-      if (hand) {
+      if (hand && !hand.cards[k]) {
+        hole += '<div class="slot"></div>';
+      } else if (hand) {
         const code = hand.cards[k];
         hole += cardHTML(code, '', { cls: `pop${hlCards.has(code) ? ' hl' : ''}`, style: `--dd:${k * 120}ms` });
       } else if (idx !== undefined) {
@@ -648,8 +651,10 @@
     const r = S.result;
     if (!r) return '';
     const nameOf = (id) => S.players.find((p) => p.id === id)?.name || '';
-    if (r.uncontested) return r.winners[0] === S.me ? t('ip.whyAllFold') : t('ip.whyOthersWin', { name: nameOf(r.winners[0]) });
+    if (r.voided) return t('why.voided');
     const mine = r.hands.find((h) => h.id === S.me);
+    if (mine?.dq) return t('why.dq');
+    if (r.uncontested) return r.winners[0] === S.me ? t('ip.whyAllFold') : t('ip.whyOthersWin', { name: nameOf(r.winners[0]) });
     if (mine?.folded) return t('why.folded');
     if (!mine || r.winners.length > 1) return '';
     const handName = I18N.hand(mine.score);
@@ -676,7 +681,7 @@
 
   function showBanner(detail, reason) {
     const ph = S.phase;
-    if (ph === 'showdown' && P?.phase !== 'showdown' && S.result) {
+    if (ph === 'showdown' && P?.phase !== 'showdown' && S.result && !S.result.voided) {
       clearTimeout(bannerTimer);
       // Let the table reveal play first, then take the stage.
       const delay = S.game === 'nut' ? 500 : 1300;
@@ -822,7 +827,10 @@
     };
     $('#phaseLabel').textContent = labels[ph] || '';
     $('#phaseSub').textContent = subs[ph] || '';
-    showBanner(() => I18N.hand(S.result.hands.find((h) => h.id === S.me)?.score), outcomeReason);
+    showBanner(() => {
+      const mine = S.result.hands.find((h) => h.id === S.me);
+      return mine?.dq ? t('badge.dq') : mine?.score ? I18N.hand(mine.score) : '';
+    }, outcomeReason);
   }
 
   function renderActions({ me, opp }) {
@@ -854,7 +862,7 @@
     } else if (ph === 'pick') {
       html = me.locked
         ? `<span class="hint dots">${t('hint.oppPicking')}</span>`
-        : `<span class="hint">${t('hint.tapToPick')} <b>${me.pickCount}/2</b></span>
+        : `<span class="hint">${t('hint.tapToPick')} <b>${me.pickCount}/2</b> <em class="dq-warn">${t('hint.dqWarn')}</em></span>
            <button class="btn gold big" data-act="lock" ${me.pickCount === 2 ? '' : 'disabled'}>${t('act.lock')}</button>`;
     } else if (ph === 'showdown') {
       const last = S.result?.final;

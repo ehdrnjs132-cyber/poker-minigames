@@ -1094,3 +1094,4 @@ body.chat-open .chat-fab { opacity: 0; pointer-events: none; transform: scale(.8
   .board[data-label]::before, .grid[data-label]::before { font-size: .62rem; padding: 1px 9px; }
 }
 .hole .card .front { box-shadow: 0 5px 12px rgba(0, 0, 0, .45), inset 0 0 0 2px #6f9bff; } /* picked cards come from the blue pool */
+.hint .dq-warn { font-style: normal; color: #ff8a95; font-weight: 800; margin-left: 4px; }
