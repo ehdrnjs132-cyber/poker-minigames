@@ -90,6 +90,7 @@ class IndianPoker extends MemoryPoker {
 
   // Fold any time during the betting round, not only on your turn.
   onAction(playerId, action) {
+    if (this.paused) return;
     if (action?.type === 'fold' && this.phase === 'bet' && playerId !== this.turnId) return void this.foldNow(playerId);
     return super.onAction(playerId, action);
   }
@@ -202,6 +203,7 @@ class IndianPoker extends MemoryPoker {
       settings: this.settings,
       durations: { bet: this.turnMs, showdown: CFG.showdownMs },
       notice: this.notice,
+      paused: !!this.paused,
       ...this.betView(viewerId),
       topPenalty: CFG.topPenalty,
       deckLeft: this.deck.length,

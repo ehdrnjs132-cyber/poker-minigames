@@ -240,8 +240,42 @@ class MemoryPoker {
     this.clearTimer();
     this.phase = phase;
     this.phaseStartedAt = Date.now();
-    this.deadline = ms ? Date.now() + ms : null;
-    if (ms) this.timer = setTimeout(then, ms);
+    this.timerFn = ms ? then : null;
+    if (this.paused) {
+      // Frozen by a duel: keep the full time for when play resumes.
+      this.pausedLeft = ms || null;
+      this.deadline = null;
+    } else {
+      this.deadline = ms ? Date.now() + ms : null;
+      if (ms) this.timer = setTimeout(then, ms);
+    }
+    this.changed();
+    this.runBots();
+  }
+
+  // ---- pause (a duel freezes the table) ----------------------------------
+  canDuel() { return true; }
+
+  pause() {
+    if (this.paused) return;
+    this.paused = true;
+    this.pausedAt = Date.now();
+    this.pausedLeft = this.deadline ? Math.max(500, this.deadline - Date.now()) : null;
+    this.clearTimer();
+    this.deadline = null;
+    this.changed();
+  }
+
+  resume() {
+    if (!this.paused) return;
+    this.paused = false;
+    // Lock-time races (Nut Race) shouldn't count the frozen time.
+    if (this.phaseStartedAt) this.phaseStartedAt += Date.now() - this.pausedAt;
+    if (this.pausedLeft != null && this.timerFn) {
+      this.deadline = Date.now() + this.pausedLeft;
+      this.timer = setTimeout(this.timerFn, this.pausedLeft);
+    }
+    this.pausedLeft = null;
     this.changed();
     this.runBots();
   }
@@ -436,6 +470,7 @@ class MemoryPoker {
   }
 
   runBots() {
+    if (this.paused) return;
     if (this.phase === 'bet') {
       const p = this.players.find((x) => x.id === this.turnId);
       if (p?.bot) {
@@ -490,6 +525,7 @@ class MemoryPoker {
   // ---- actions ---------------------------------------------------------
 
   onAction(playerId, action) {
+    if (this.paused) return; // nobody plays while a duel is on
     const s = this.ps.get(playerId);
     if (!s || !action) return;
     if (BET_ACTIONS.includes(action.type)) return void this.applyBet(playerId, action);
@@ -717,6 +753,7 @@ class MemoryPoker {
       settings: this.settings,
       durations: { memorize: this.memorizeMs, reveal: CFG.revealMs, shuffle: this.shuffleMs || 0, pick: this.pickMs, bet: this.turnMs, showdown: CFG.showdownMs },
       notice: this.notice,
+      paused: !!this.paused,
       ...this.betView(viewerId),
       grid: this.grid.map((card) => ({ card: showGrid ? card : null })),
       board: showBoard ? this.board : [],

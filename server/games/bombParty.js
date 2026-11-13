@@ -57,6 +57,10 @@ class BombParty {
   canLateJoin() { return this.phase === 'gameover' && this.players.length < this.maxPlayers; }
   canSit() { return this.canJoin() || this.canLateJoin(); }
 
+  canDuel() { return this.phase === 'lobby' || this.phase === 'gameover'; }
+  pause() {}
+  resume() {}
+
   alive() { return this.players.filter((p) => { const s = this.ps.get(p.id); return s && !s.out; }); }
 
   // ---- lifecycle -------------------------------------------------------

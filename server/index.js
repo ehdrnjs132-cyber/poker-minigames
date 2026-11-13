@@ -41,6 +41,7 @@ const io = new Server(server);
 
 /** @type {Map<string, any>} */
 const rooms = new Map();
+const Duels = require('./duels')({ io, rooms, members: (room) => members(room) });
 
 // Lobby chat: everyone not seated in a room shares one channel.
 const lobbyChat = [];
@@ -92,7 +93,7 @@ function broadcast(room) {
     if (!p.socketId) return;
     const view = room.game.viewFor(p.id);
     for (const vp of view.players) Object.assign(vp, faces.get(vp.id));
-    io.to(p.socketId).emit('state', { now, code: room.code, gameId: room.gameId, me: p.id, spectator, spectators: watchers, ...view });
+    io.to(p.socketId).emit('state', { now, code: room.code, gameId: room.gameId, me: p.id, spectator, spectators: watchers, myCoupons: room.coupons?.[p.id] || 0, duel: Duels.duelView(room), ...view });
   };
   for (const p of room.players) send(p, false);
   for (const s of room.spectators) send(s, true);
@@ -119,6 +120,7 @@ function scheduleCleanup(room) {
 function destroyRoom(room) {
   clearTimeout(room.cleanupTimer);
   room.game.dispose();
+  Duels.cleanup(room);
   rooms.delete(room.code);
   for (const s of room.spectators) if (s.socketId) io.to(s.socketId).emit('kicked', { code: 'srv.roomClosed' });
   announceRooms();
@@ -237,6 +239,7 @@ function addBot(room, level) {
 function removeBot(room, id) {
   const bot = room.players.find((p) => p.id === id && p.bot);
   if (!bot || room.game.phase !== 'lobby') return;
+  Duels.onLeave(room, bot.id);
   room.players = room.players.filter((p) => p !== bot);
   room.game.onLeave(bot.id, bot.name);
   postChat(room, { kind: 'system', code: 'sys.left', name: bot.name });
@@ -338,6 +341,7 @@ io.on('connection', (socket) => {
     if (!['lobby', 'gameover'].includes(phase) && !room.game.ps.get(player.id)?.out) {
       profiles.recordAbandon(room.gameId, player.userId, room.players.length);
     }
+    Duels.onLeave(room, player.id);
     room.players = room.players.filter((p) => p !== player);
     room.game.onLeave(player.id, player.name);
     if (!room.players.some((p) => !p.bot)) return destroyRoom(room);
@@ -459,6 +463,8 @@ io.on('connection', (socket) => {
     }
   });
 
+  Duels.attach(socket, () => ctx);
+
   socket.on('leave', () => detach());
 
   // Lobby plaza movement (only while standing in the lobby).
@@ -482,6 +488,7 @@ io.on('connection', (socket) => {
     }
     player.connected = false;
     player.socketId = null;
+    Duels.onDisconnect(room, player.id);
     room.broadcast();
     scheduleCleanup(room);
   });
