@@ -18,8 +18,8 @@
   ui.className = 'roam-ui';
   ui.innerHTML = `
     <div class="joy" id="joy"><div class="joy-knob" id="joyKnob"></div></div>
-    <button class="sword-btn" id="swordBtn" aria-label="sword">⚔️</button>
-    <button class="coupon-btn" id="couponBtn"><span>🍅</span><b id="couponN">0</b></button>`;
+    <button class="sword-btn" id="swordBtn" aria-label="sword">${window.Icons ? Icons.svg('sword') : '⚔️'}</button>
+    <button class="coupon-btn" id="couponBtn">${window.Icons ? Icons.svg('tomato') : '<span>🍅</span>'}<b id="couponN">0</b></button>`;
   document.body.appendChild(ui);
 
   // ---------------------------------------------------------------- avatars

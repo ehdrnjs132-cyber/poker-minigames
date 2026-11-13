@@ -24,7 +24,7 @@
   const fab = document.createElement('button');
   fab.id = 'tauntFab';
   fab.className = 'taunt-fab';
-  fab.innerHTML = '<span>😏</span>';
+  fab.innerHTML = window.Icons ? Icons.svg('taunt') : '<span>😏</span>';
   const tray = document.createElement('div');
   tray.id = 'tauntTray';
   tray.className = 'taunt-tray';

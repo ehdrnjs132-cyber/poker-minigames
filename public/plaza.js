@@ -55,9 +55,9 @@
   ];
   const ART = {
     memory: '<span class="pm pm-back"></span><span class="pm pm-face red">A<i>♥</i></span><span class="pm pm-back"></span>',
-    nut: '<span class="pm pm-face">K<i>♠</i></span><span class="pm pm-face red">K<i>♥</i></span><span class="pm pm-bolt">⚡</span>',
-    liar: '<span class="pm-bombcat">🤥</span><span class="pm pm-back pm-q">?</span><span class="pm pm-back pm-q">?</span>',
-    bomb: '<span class="pm-bombcat">💣</span><span class="pm pm-bolt">🐱</span>',
+    nut: '<span class="pm pm-face">K<i>♠</i></span><span class="pm pm-face red">K<i>♥</i></span><span class="pm pm-bolt">' + (window.Icons ? Icons.svg('bolt', 'pm-ico') : '⚡') + '</span>',
+    liar: '<span class="pm-bombcat">' + (window.Icons ? Icons.svg('liar', 'pm-ico big') : '🤥') + '</span><span class="pm pm-back pm-q">?</span><span class="pm pm-back pm-q">?</span>',
+    bomb: '<span class="pm-bombcat">' + (window.Icons ? Icons.svg('bomb', 'pm-ico big') : '💣') + '</span>',
     indian: '<span class="pm pm-face">7<i>♠</i></span><span class="pm pm-back pm-q">?</span><span class="pm pm-face red">10<i>♥</i></span>',
   };
   let rooms = [];

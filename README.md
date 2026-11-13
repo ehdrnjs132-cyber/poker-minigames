@@ -108,6 +108,10 @@
 
 서버가 카드 정보를 관리합니다. 카드가 뒤집힌 뒤에는 클라이언트로 카드 값을 보내지 않고, 쇼다운 전까지 상대 선택도 숨기기 때문에 개발자도구로 엿볼 수 없습니다.
 
+## 귀여운 고양이 테마
+
+`public/theme-cat.css`가 기본 스타일 위에 덮어씌워집니다: 보랏빛 밤하늘 + 사탕색 강조(버터 노랑·핑크·민트·하늘), 굵은 외곽선의 말랑한 입체 버튼, 둥근 패널, 고양이 발바닥 무늬 카드 뒷면·바닥, 테이블 자리 아바타의 고양이 귀, 둥근 폰트(Jua·Fredoka). 하단 버튼·로비 발판 그림은 직접 그린 SVG 아이콘(`public/icons.js`)이라 기기마다 모양이 같습니다. `index.html`에서 `theme-cat.css` 한 줄을 빼면 이전 모습으로 돌아갑니다.
+
 ## 사용한 외부 에셋 (모두 무료·상업적 사용 가능)
 
 - **Kenney** (CC0): Casino Audio, Interface Sounds(효과음, `public/assets/sfx`), Particle Pack(별·반짝임·불꽃·연기, 128px로 줄여 `public/assets/fx`). 라이선스: `public/assets/LICENSE-kenney-*.txt`.

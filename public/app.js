@@ -500,6 +500,8 @@
     $('#potInfo').textContent = fmt(inResult && S.result ? S.result.pot : S.pot);
     const watchers = S.spectators || [];
     $('#watchInfo').hidden = !watchers.length;
+    const wi = document.querySelector('.watch-ico');
+    if (wi && !wi.innerHTML && window.Icons) wi.innerHTML = Icons.svg('eye', 'chip-ico');
     $('#watchCount').textContent = watchers.length;
     $('#watchInfo').title = watchers.map((w) => w.name).join(', ');
     $('#room').classList.toggle('watching', !!S.spectator);

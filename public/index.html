@@ -7,8 +7,9 @@
   <meta name="description" content="친구들과 함께하는 포커 룰 미니게임" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link href="https://fonts.googleapis.com/css2?family=Black+Han+Sans&family=Gaegu:wght@700&family=Noto+Sans+KR:wght@400;500;700;900&family=Oswald:wght@500;600;700&display=swap" rel="stylesheet" />
+  <link href="https://fonts.googleapis.com/css2?family=Black+Han+Sans&family=Jua&family=Fredoka:wght@500;600;700&family=Gaegu:wght@700&family=Noto+Sans+KR:wght@400;500;700;900&family=Oswald:wght@500;600;700&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="style.css" />
+  <link rel="stylesheet" href="theme-cat.css" />
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Cpath fill='%23f5c451' d='M32 4C22 18 8 24 8 38c0 8 6 13 13 13 4 0 7-2 9-4-1 5-3 9-6 13h16c-3-4-5-8-6-13 2 2 5 4 9 4 7 0 13-5 13-13C56 24 42 18 32 4z'/%3E%3C/svg%3E" />
 </head>
 <body>
@@ -122,7 +123,7 @@
       <div class="info-chips">
         <span class="chip-info"><em>ROUND</em><b id="roundInfo">-</b></span>
         <span class="chip-info"><em>ANTE</em><b id="anteInfo">-</b></span>
-        <span class="chip-info watch-chip" id="watchInfo" hidden><em>👀</em><b id="watchCount">0</b></span>
+        <span class="chip-info watch-chip" id="watchInfo" hidden><em class="watch-ico"></em><b id="watchCount">0</b></span>
       </div>
       <button class="icon-btn" data-tutorial data-i18n-label="howto">
         <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9.5" fill="none" stroke="currentColor" stroke-width="2"/><path d="M9.3 9.4a2.8 2.8 0 0 1 5.4 1c0 1.9-2.7 2.3-2.7 4" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><circle cx="12" cy="17.6" r="1.2" fill="currentColor"/></svg>
@@ -324,6 +325,7 @@
   <script src="fx.js"></script>
   <script src="bg.js"></script>
   <script src="stickers.js"></script>
+  <script src="icons.js"></script>
   <script src="app.js"></script>
   <script src="chat.js"></script>
   <script src="tutorial.js"></script>
