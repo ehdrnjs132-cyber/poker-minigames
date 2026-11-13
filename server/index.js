@@ -40,6 +40,16 @@ const io = new Server(server);
 /** @type {Map<string, any>} */
 const rooms = new Map();
 
+// Lobby chat: everyone not seated in a room shares one channel.
+const lobbyChat = [];
+let lobbySeq = 0;
+function postLobbyChat(msg) {
+  const full = { id: ++lobbySeq, at: Date.now(), lobby: true, ...msg };
+  lobbyChat.push(full);
+  if (lobbyChat.length > CHAT_HISTORY) lobbyChat.shift();
+  io.to('lobby').emit('chat', full);
+}
+
 function genCode() {
   const A = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
   let code;
@@ -228,6 +238,7 @@ io.on('connection', (socket) => {
   socket.join('lobby');
   socket.emit('rooms', roomList());
   socket.emit('online', onlineList());
+  socket.emit('chatHistory', lobbyChat);
   online.set(socket.id, { uid: null, room: null });
 
   // ---- profile (no password: browser-held id + token) ----
@@ -296,6 +307,7 @@ io.on('connection', (socket) => {
     socket.join('lobby');
     socket.emit('rooms', roomList());
     socket.emit('online', onlineList());
+    socket.emit('chatHistory', lobbyChat);
     announceOnline();
   }
 
@@ -322,20 +334,29 @@ io.on('connection', (socket) => {
 
   const chatTimes = [];
   socket.on('chat', (msg) => {
-    if (!ctx || !msg || typeof msg !== 'object') return;
+    if (!msg || typeof msg !== 'object') return;
+    if (!ctx && !uid) return;
     const now = Date.now();
     while (chatTimes.length && now - chatTimes[0] > CHAT_WINDOW_MS) chatTimes.shift();
     if (chatTimes.length >= CHAT_BURST) return socket.emit('chatError', { code: 'srv.chatFast' });
-    const { player, room, spectator } = ctx;
-    const base = { playerId: player.id, name: player.name, spectator: spectator || undefined };
+    let base, post;
+    if (ctx) {
+      const { player, room, spectator } = ctx;
+      base = { playerId: player.id, name: player.name, spectator: spectator || undefined };
+      post = (m) => postChat(room, m);
+    } else {
+      // In the lobby: sid lets the plaza pop a bubble over the sender's character.
+      base = { sid: socket.id, name: cleanName(profiles.getUser(uid)?.name) };
+      post = postLobbyChat;
+    }
     if (msg.kind === 'sticker' && /^[a-z0-9]{1,16}$/.test(String(msg.sticker))) {
       chatTimes.push(now);
-      postChat(room, { ...base, kind: 'sticker', sticker: msg.sticker });
+      post({ ...base, kind: 'sticker', sticker: msg.sticker });
     } else if (msg.kind === 'text') {
       const text = String(msg.text || '').replace(/\s+/g, ' ').trim().slice(0, CHAT_MAX_LEN);
       if (!text) return;
       chatTimes.push(now);
-      postChat(room, { ...base, kind: 'text', text });
+      post({ ...base, kind: 'text', text });
     }
   });
 

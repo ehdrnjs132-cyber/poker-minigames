@@ -58,8 +58,12 @@ function nutPlan(grid, board, level, { maxDelay = Infinity } = {}) {
   const L = LEVELS[level] || LEVELS.normal;
   const pairs = rankPairs(grid, board);
   const hit = crypto.randomInt(1000) / 1000 < L.nutHit;
-  const target = hit ? pairs[0] : pairs[1 + crypto.randomInt(Math.min(8, pairs.length - 1))];
-  return { picks: target.picks.slice(), delay: Math.min(rand(L.nutDelay), maxDelay) };
+  const rank = hit ? 0 : 1 + crypto.randomInt(Math.min(8, pairs.length - 1));
+  const target = pairs[rank];
+  // Everything is face up, so the bot knows how close to the nuts it got.
+  // Even the nuts can lose a speed tie, so it never feels certain.
+  const confidence = hit ? 0.85 : Math.max(0.2, 0.72 - rank * 0.06);
+  return { picks: target.picks.slice(), delay: Math.min(rand(L.nutDelay), maxDelay), confidence };
 }
 
 function makeName(taken) {

@@ -1,4 +1,6 @@
-// In-room chat: side panel, sticker tray, and speech bubbles over seats.
+// Chat: one panel for the lobby (lobby channel) and for rooms (room channel).
+// Enter opens it from anywhere; messages also pop as bubbles over seats
+// (in a room) or over plaza characters (in the lobby).
 const Chat = (() => {
   const $ = (s) => document.querySelector(s);
   const socket = window.HA.socket;
@@ -32,11 +34,35 @@ const Chat = (() => {
     if (!text) return;
     socket.emit('chat', { kind: 'text', text });
     input.value = '';
+    // Sent with Enter on a keyboard: hand the keys back to the game / plaza.
+    if (matchMedia('(pointer: fine)').matches) input.blur();
   });
-  input.addEventListener('keydown', (e) => e.stopPropagation());
+  input.addEventListener('keydown', (e) => {
+    e.stopPropagation();
+    if (e.key === 'Escape') { input.blur(); setOpen(false); }
+    // Enter on an empty box just leaves the chat input.
+    if (e.key === 'Enter' && !input.value.trim()) { e.preventDefault(); input.blur(); }
+  });
+
+  // Enter anywhere (not while typing elsewhere or in a dialog) jumps into chat.
+  addEventListener('keydown', (e) => {
+    if (e.key !== 'Enter' || e.isComposing || e.repeat) return;
+    if (/^(INPUT|TEXTAREA|SELECT)$/.test(e.target.tagName) || e.target.isContentEditable) return;
+    if (document.querySelector('.overlay.show:not(#overlay)')) return;
+    e.preventDefault();
+    setOpen(true);
+    input.focus();
+  });
+
+  const inLobby = () => document.getElementById('lobby').classList.contains('active');
+  const isMine = (m) => (m.sid ? m.sid === socket.id : m.playerId === window.HA.me());
+  function renderTitle() {
+    document.getElementById('chatTitle').textContent = inLobby() ? I18N.t('chat.lobbyTitle') : I18N.t('chat.title');
+  }
 
   function setOpen(open) {
     panel.classList.toggle('open', open);
+    renderTitle();
     document.body.classList.toggle('chat-open', open);
     if (open) {
       unread = 0;
@@ -58,8 +84,7 @@ const Chat = (() => {
 
   function itemHTML(m) {
     if (m.kind === 'system') return `<div class="msg system">${esc(I18N.msg(m))}</div>`;
-    const me = window.HA.me();
-    const mine = m.playerId === me;
+    const mine = isMine(m);
     const time = new Date(m.at).toLocaleTimeString(I18N.lang === 'ko' ? 'ko-KR' : 'en-US', { hour: '2-digit', minute: '2-digit' });
     const body = m.kind === 'sticker'
       ? `<div class="bubble sticker-msg">${Stickers.svg(m.sticker, 92)}</div>`
@@ -74,10 +99,10 @@ const Chat = (() => {
     history.push(m);
     const nearBottom = list.scrollHeight - list.scrollTop - list.clientHeight < 80;
     list.insertAdjacentHTML('beforeend', itemHTML(m));
-    if (nearBottom || m.playerId === window.HA.me()) list.scrollTop = list.scrollHeight;
+    if (nearBottom || isMine(m)) list.scrollTop = list.scrollHeight;
     if (!live || m.kind === 'system') return;
     showBubble(m);
-    if (m.playerId !== window.HA.me()) {
+    if (!isMine(m)) {
       window.SFX && SFX.pop();
       if (!panel.classList.contains('open')) {
         unread++;
@@ -88,6 +113,7 @@ const Chat = (() => {
 
   // Speech bubble that pops from the sender's seat.
   function showBubble(m) {
+    if (m.sid) return plazaBubble(m);
     const seat = document.querySelector(`.seat[data-id="${m.playerId}"]`);
     if (!seat || !document.getElementById('room').classList.contains('active')) return;
     const r = seat.getBoundingClientRect();
@@ -106,7 +132,22 @@ const Chat = (() => {
     setTimeout(() => b.remove(), 3600);
   }
 
+  // Lobby: the bubble rides along on the sender's plaza character.
+  function plazaBubble(m) {
+    if (!inLobby()) return;
+    const pc = document.querySelector(`.pc[data-sid="${m.sid}"]`);
+    if (!pc) return;
+    pc.querySelectorAll('.pc-bubble').forEach((old) => old.remove());
+    const b = document.createElement('div');
+    b.className = `pc-bubble${m.kind === 'sticker' ? ' is-sticker' : ''}`;
+    b.innerHTML = m.kind === 'sticker' ? Stickers.svg(m.sticker, 64) : esc(m.text);
+    pc.appendChild(b);
+    setTimeout(() => b.classList.add('out'), 3800);
+    setTimeout(() => b.remove(), 4200);
+  }
+
   socket.on('chatHistory', (msgs) => {
+    renderTitle();
     list.innerHTML = '';
     history = [];
     (msgs || []).forEach((m) => append(m, { live: false }));
@@ -117,6 +158,7 @@ const Chat = (() => {
 
   I18N.onChange(() => {
     renderTray();
+    renderTitle();
     list.innerHTML = history.map(itemHTML).join('');
     list.scrollTop = list.scrollHeight;
   });

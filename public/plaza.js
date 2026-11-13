@@ -126,9 +126,12 @@
       let o = others.get(p.sid);
       if (!o) {
         o = { el: makeChar(p, false), x: p.x, y: p.y };
+        o.el.dataset.sid = p.sid;
         others.set(p.sid, o);
       } else if (o.el._sig !== sigOf(p)) {
+        const bubble = o.el.querySelector('.pc-bubble');
         o.el.innerHTML = charHTML(p);
+        if (bubble) o.el.appendChild(bubble);
         o.el._sig = sigOf(p);
       }
       Object.assign(o, { tx: p.x, ty: p.y, d: p.d, m: p.m });
@@ -210,6 +213,7 @@
 
     // my character
     if (!me.el) me.el = makeChar(myProfile(), true);
+    if (me.el.dataset.sid !== socket.id) me.el.dataset.sid = socket.id || '';
     const prof = myProfile();
     if (me.el._sig !== sigOf(prof)) { me.el.innerHTML = charHTML(prof); me.el._sig = sigOf(prof); }
 

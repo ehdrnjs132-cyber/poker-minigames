@@ -433,6 +433,8 @@
 
     renderOpps(ctx);
     renderSeat($('#seatMe'), me, true, ctx);
+    $('#board').dataset.label = t('zone.board');
+    $('#grid').dataset.label = S.game === 'nut' ? t('zone.gridNut') : t('zone.grid');
     renderGrid(ctx);
     renderBoard(ctx);
     renderGridStatus(ctx);

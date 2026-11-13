@@ -13,8 +13,9 @@ class NutRace extends MemoryPoker {
   static meta = { ...MemoryPoker.meta, id: 'nut', name: '너트 레이스' };
 
   static normalizeSettings(raw = {}) {
-    const { players, pickSec } = MemoryPoker.normalizeSettings(raw);
-    return { players, pickSec };
+    // Same betting round as Memory Poker (after everyone locks in).
+    const { players, pickSec, betting, turnSec } = MemoryPoker.normalizeSettings(raw);
+    return { players, pickSec, betting, turnSec };
   }
 
   startRound() {
@@ -22,7 +23,7 @@ class NutRace extends MemoryPoker {
   }
 
   gridPhases() {
-    return ['pick', 'showdown', 'gameover'];
+    return ['pick', 'bet', 'showdown', 'gameover']; // everything stays face up while betting
   }
 
   pickWinners(hands) {

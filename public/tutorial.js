@@ -176,6 +176,20 @@ const Tutorial = (() => {
     },
     {
       games: ['memory', 'nut'],
+      title: { ko: '베팅 라운드', en: 'The betting round' },
+      text: {
+        ko: '모두 카드를 확정하면 <b>한 바퀴 베팅</b>을 해요(방 설정에서 끌 수 있어요). 내 차례에 <b>다이 / 체크 / 콜 / 레이즈(+50, +100) / 올인</b> 중 하나를 고르세요. 자신 있으면 올리고, 불안하면 다이! <b>다이한 사람은 쇼다운에서 빠지고</b> 낸 칩은 팟에 남아요. 레이즈가 오면 다시 내 차례가 와요.',
+        en: 'Once everyone locks in, there is <b>one round of betting</b> (you can turn it off in the room settings). On your turn choose <b>Fold / Check / Call / Raise (+50, +100) / All in</b>. Confident? Raise. Unsure? Fold! <b>Folded players sit out the showdown</b> and their chips stay in the pot. If someone raises, the turn comes back to you.',
+      },
+      html: () => `<div class="tut-felt tut-ip">
+          <div class="tut-ip-btns"><span class="b fold">${t('ip.fold')}</span><span class="b">${t('ip.check')}</span><span class="b gold tut-raise">+50</span><span class="b gold">+100</span><span class="b">${t('ip.allin')}</span></div>
+        </div>`,
+      play() {
+        later(700, () => { stage.querySelector('.tut-raise').classList.add('pulse'); window.SFX && SFX.chips(); });
+      },
+    },
+    {
+      games: ['memory', 'nut'],
       title: { ko: "칩과 라운드", en: "Chips and rounds" },
       text: { ko: "시작 칩은 <b>1,000</b>. 라운드마다 <b>앤티(참가비)</b>를 내고 시작하며, 앤티는 50 → 300까지 점점 올라갑니다. <b>10라운드</b>가 끝났을 때 칩이 많은 쪽이 이기고, 한쪽 칩이 0이 되면 바로 게임이 끝나요.", en: "You start with <b>1,000</b> chips. Each round begins with an <b>ante</b> (entry fee) that rises from 50 to 300. After <b>10 rounds</b>, the player with more chips wins. If anyone hits 0 chips, the game ends immediately." },
       html: () => `<div class="tut-felt tut-chips">
