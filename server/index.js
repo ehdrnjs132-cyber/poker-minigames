@@ -212,6 +212,17 @@ setInterval(() => {
   io.to('lobby').emit('plaza', plazaList());
 }, 100);
 
+// ---- taunts (bluff gestures) ----------------------------------------------
+const TAUNTS = {
+  self: ['smirk', 'yawn', 'shades', 'sweat', 'fire', 'chips'],
+  aimed: ['tomato', 'tongue', 'point'],
+};
+const TAUNT_GAP_MS = 1200;
+function sendTaunt(room, from, kind, target) {
+  const msg = { from, kind, target, at: Date.now() };
+  for (const p of members(room)) if (p.socketId) io.to(p.socketId).emit('taunt', msg);
+}
+
 function addBot(room, level) {
   if (!Bots.isLevel(level) || !room.game.canJoin()) return;
   const name = Bots.makeName(room.players.map((p) => p.name));
@@ -419,6 +430,32 @@ io.on('connection', (socket) => {
     if (action.type === 'addBot') return addBot(room, action.level);
     if (action.type === 'removeBot') return removeBot(room, action.id);
     room.game.onAction(player.id, action);
+  });
+
+  // Taunts / bluff gestures: pure show, never stored in game state.
+  let lastTaunt = 0;
+  socket.on('taunt', (msg) => {
+    if (!ctx || ctx.spectator || !msg || typeof msg !== 'object') return;
+    const now = Date.now();
+    if (now - lastTaunt < TAUNT_GAP_MS) return;
+    const kind = String(msg.kind || '');
+    if (!TAUNTS.self.includes(kind) && !TAUNTS.aimed.includes(kind)) return;
+    const { room, player } = ctx;
+    let target = null;
+    if (TAUNTS.aimed.includes(kind)) {
+      target = room.players.find((p) => p.id === msg.target && p.id !== player.id);
+      if (!target) return;
+    }
+    lastTaunt = now;
+    sendTaunt(room, player.id, kind, target?.id || null);
+    // Bots don't take it lying down.
+    if (target?.bot && crypto.randomInt(100) < 65) {
+      setTimeout(() => {
+        if (!rooms.has(room.code) || !room.players.includes(target)) return;
+        const back = crypto.randomInt(100) < 55 ? 'tomato' : Bots.pickOne(['smirk', 'tongue', 'shades', 'fire']);
+        sendTaunt(room, target.id, back, TAUNTS.aimed.includes(back) ? player.id : null);
+      }, 1200 + crypto.randomInt(1400));
+    }
   });
 
   socket.on('leave', () => detach());

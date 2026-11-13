@@ -84,6 +84,7 @@
   window.cardHTML = cardHTML; // shared with tutorial.js
   // Shared with chat.js / profile.js.
   let ME = null; // my public profile { id, name, avatar, avatarV }
+  window.currentState = () => S; // read-only peek for taunts.js
   window.HA = {
     socket, toast, esc, fmt, setHTML,
     me: () => S?.me || session.get()?.playerId,
@@ -92,6 +93,7 @@
     avatarInner: (p) => avatarInner(p),
     colorFor: (id) => colorFor(id),
     createGame: (id) => createGame(id),
+    state: () => S,
     join: (code) => join(code),
     myName: () => nameInput.value.trim() || ME?.name || pref.get('name') || '',
     credentials: () => ({ uid: pref.get('uid'), token: pref.get('utok') }),

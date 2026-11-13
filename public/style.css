@@ -1299,3 +1299,66 @@ body.chat-open .chat-fab { opacity: 0; pointer-events: none; transform: scale(.8
 .is-bet { left: calc(50% + var(--bx)); top: calc(62% + var(--by)); }
 .ip-center { top: 45%; }
 @media (max-aspect-ratio: 4/5) { .ip-oval { margin-top: 58px; width: min(100%, calc((100dvh - 300px) * .667)); } }
+
+/* ================= taunts / bluff gestures ================= */
+.taunt-fab { position: fixed; right: 84px; bottom: 18px; z-index: 26; width: 56px; height: 56px; border-radius: 50%; border: 3px solid #fff; display: none; place-items: center;
+  background: radial-gradient(circle at 35% 30%, #ff8fa3, #e3283a 70%); box-shadow: 0 4px 0 #7a0612, 0 10px 26px rgba(0, 0, 0, .5); font-size: 1.7rem; transition: transform .15s; }
+.taunt-fab.show { display: grid; }
+.taunt-fab:hover { transform: translateY(-2px) rotate(-8deg); }
+body.chat-open .taunt-fab { display: none; }
+body.taunt-aim .taunt-fab { animation: ipPulse 1s infinite; }
+.taunt-tray { position: fixed; right: 16px; bottom: 86px; z-index: 27; width: min(330px, calc(100vw - 32px)); padding: 12px; border-radius: 18px; display: none;
+  background: linear-gradient(180deg, rgba(19, 39, 92, .98), rgba(6, 14, 38, .98)); border: 2px solid var(--gold); box-shadow: 0 16px 40px rgba(0, 0, 0, .6); }
+.taunt-tray.open { display: block; animation: ttIn .2s cubic-bezier(.2, 1.4, .4, 1); }
+@keyframes ttIn { from { transform: translateY(12px) scale(.95); opacity: 0; } }
+.tt-head { font-family: var(--display); color: var(--gold); font-size: 1.1rem; margin-bottom: 8px; }
+.tt-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 7px; }
+.tt-grid button { display: grid; justify-items: center; gap: 2px; padding: 8px 4px; border-radius: 12px; border: 1px solid rgba(127, 176, 255, .3); background: rgba(255, 255, 255, .06); color: #fff; font-size: .74rem; font-weight: 800; }
+.tt-grid button i { font-style: normal; font-size: 1.7rem; line-height: 1.1; }
+.tt-grid button:hover { background: rgba(245, 196, 81, .18); border-color: var(--gold); transform: translateY(-2px); }
+.tt-grid button.aimed { border-color: rgba(255, 90, 106, .55); background: rgba(255, 90, 106, .1); }
+.tt-note { margin-top: 8px; font-size: .7rem; color: var(--muted); text-align: center; }
+body.taunt-aim .iseat:not(.me):not(.empty), body.taunt-aim #opps .seat:not(.empty) { cursor: crosshair; outline: 3px dashed rgba(255, 90, 106, .9); outline-offset: 4px; border-radius: 16px; animation: aimPulse .8s ease-in-out infinite; }
+@keyframes aimPulse { 50% { outline-color: rgba(255, 200, 80, .95); } }
+
+.taunt-fx { position: fixed; z-index: 45; pointer-events: none; transform: translate(-50%, -50%); }
+.taunt-pop { font-size: calc(var(--s) * .9); animation: tPop 2.4s cubic-bezier(.2, 1.5, .4, 1) both; filter: drop-shadow(0 6px 10px rgba(0, 0, 0, .5)); }
+@keyframes tPop { 0% { transform: translate(-50%, -50%) scale(.2); opacity: 0; } 15% { transform: translate(-50%, -110%) scale(1.15); opacity: 1; } 30%, 80% { transform: translate(-50%, -100%) scale(1); opacity: 1; } 100% { transform: translate(-50%, -140%) scale(.9); opacity: 0; } }
+.taunt-yawn { animation-name: tYawn; }
+@keyframes tYawn { 0% { transform: translate(-50%, -50%) scale(.2); opacity: 0; } 20%, 80% { transform: translate(-50%, -100%) scale(1) rotate(-8deg); opacity: 1; } 50% { transform: translate(-50%, -100%) scale(1.2) rotate(8deg); } 100% { opacity: 0; } }
+.taunt-say { white-space: nowrap; padding: 6px 12px; border-radius: 14px; background: #fff; color: #14213d; font-weight: 900; font-size: .95rem; transform: translate(-50%, -100%);
+  box-shadow: 0 6px 16px rgba(0, 0, 0, .45); animation: tSay 2.6s ease both; }
+.taunt-say::after { content: ''; position: absolute; left: 50%; bottom: -6px; margin-left: -6px; border: 6px solid transparent; border-bottom: 0; border-top-color: #fff; }
+@keyframes tSay { 0% { opacity: 0; transform: translate(-50%, -60%) scale(.6); } 12%, 85% { opacity: 1; transform: translate(-50%, -130%) scale(1); } 100% { opacity: 0; transform: translate(-50%, -150%); } }
+.taunt-throw { font-size: 2.4rem; transition: transform .62s cubic-bezier(.3, 0, .7, 1); }
+.taunt-throw.go { transform: translate(calc(-50% + var(--dx)), calc(-50% + var(--dy))) rotate(720deg); animation: tArc .62s ease-out; }
+@keyframes tArc { 50% { margin-top: -70px; } }
+.taunt-splat { width: var(--s); height: var(--s); }
+.taunt-splat .splat-blob { position: absolute; inset: -18%; background: radial-gradient(circle at 50% 50%, #e3283a 0 38%, transparent 39%), radial-gradient(circle at 20% 30%, #e3283a 0 14%, transparent 15%), radial-gradient(circle at 80% 25%, #c81d2e 0 12%, transparent 13%), radial-gradient(circle at 75% 80%, #e3283a 0 15%, transparent 16%), radial-gradient(circle at 25% 78%, #c81d2e 0 11%, transparent 12%);
+  animation: tSplat 2.6s ease both; opacity: .92; }
+.taunt-splat b { position: absolute; left: 50%; top: 50%; font-size: calc(var(--s) * .5); transform: translate(-50%, -50%); animation: tSplat 2.6s ease both; }
+@keyframes tSplat { 0% { transform: translate(0, 0) scale(.2); opacity: 0; } 10% { transform: scale(1.2); opacity: 1; } 20%, 75% { transform: scale(1); opacity: .92; } 100% { transform: translateY(18px) scale(1, 1.15); opacity: 0; } }
+.taunt-splat b { transform-origin: center; }
+.seat.taunt-hit, .iseat.taunt-hit { animation: tHit .5s; }
+@keyframes tHit { 20% { translate: -6px 0; } 40% { translate: 6px 0; } 60% { translate: -4px 0; } 80% { translate: 3px 0; } }
+.taunt-point { font-size: calc(var(--s) * .8); animation: tPoint 2.4s ease both; }
+@keyframes tPoint { 0% { opacity: 0; transform: translate(-50%, -50%) rotate(var(--a, 0deg)) translateX(0) scale(.4); } 15%, 85% { opacity: 1; transform: translate(-50%, -50%) rotate(var(--a, 0deg)) translateX(calc(var(--s) * .9)) scale(1); } 50% { transform: translate(-50%, -50%) rotate(var(--a, 0deg)) translateX(calc(var(--s) * 1.1)) scale(1.1); } 100% { opacity: 0; } }
+.taunt-shades { font-size: calc(var(--s) * .62); animation: tShades 3.2s cubic-bezier(.3, 1.4, .5, 1) both; }
+@keyframes tShades { 0% { transform: translate(-50%, -260%) rotate(-20deg); opacity: 0; } 20%, 85% { transform: translate(-50%, -62%) rotate(0); opacity: 1; } 100% { transform: translate(-50%, -62%); opacity: 0; } }
+.taunt-sweat b { position: absolute; font-size: calc(var(--s) * .32); animation: tDrop 1.3s ease-in infinite; }
+.taunt-sweat b:nth-child(1) { left: calc(var(--s) * -.45); top: calc(var(--s) * -.4); }
+.taunt-sweat b:nth-child(2) { left: calc(var(--s) * .3); top: calc(var(--s) * -.5); animation-delay: .35s; }
+.taunt-sweat b:nth-child(3) { left: calc(var(--s) * .1); top: calc(var(--s) * -.65); animation-delay: .7s; }
+@keyframes tDrop { 0% { transform: translateY(0); opacity: 0; } 20% { opacity: 1; } 100% { transform: translateY(calc(var(--s) * .7)); opacity: 0; } }
+.taunt-fire b { position: absolute; font-size: calc(var(--s) * .45); animation: tFlame .5s ease-in-out infinite alternate, tFade 2.6s both; }
+.taunt-fire b:nth-child(1) { left: calc(var(--s) * -.7); top: calc(var(--s) * -.1); }
+.taunt-fire b:nth-child(2) { left: calc(var(--s) * -.2); top: calc(var(--s) * -.85); animation-delay: .15s, 0s; font-size: calc(var(--s) * .6); }
+.taunt-fire b:nth-child(3) { left: calc(var(--s) * .35); top: calc(var(--s) * -.1); animation-delay: .3s, 0s; }
+@keyframes tFlame { to { transform: translateY(-6px) scale(1.15); } }
+@keyframes tFade { 0% { opacity: 0; } 12%, 85% { opacity: 1; } 100% { opacity: 0; } }
+.taunt-chips i { position: absolute; left: calc(var(--s) * -.2); width: calc(var(--s) * .42); height: calc(var(--s) * .15); border-radius: 50%;
+  background: radial-gradient(ellipse, #fff 0 30%, #e3283a 31% 70%, #fff 71%); box-shadow: 0 2px 0 #7a0612; animation: tRiffle .6s ease-in-out infinite, tFade 2.4s both; }
+.taunt-chips i:nth-child(1) { top: calc(var(--s) * -.75); } .taunt-chips i:nth-child(2) { top: calc(var(--s) * -.85); animation-delay: .1s, 0s; }
+.taunt-chips i:nth-child(3) { top: calc(var(--s) * -.95); animation-delay: .2s, 0s; } .taunt-chips i:nth-child(4) { top: calc(var(--s) * -1.05); animation-delay: .3s, 0s; }
+@keyframes tRiffle { 50% { transform: translateX(calc(var(--s) * .3)) translateY(-4px); } }
+@media (max-width: 560px) { .taunt-fab { width: 50px; height: 50px; right: 76px; font-size: 1.5rem; } }
