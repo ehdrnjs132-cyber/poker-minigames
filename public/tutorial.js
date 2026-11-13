@@ -239,6 +239,36 @@ const Tutorial = (() => {
       play() {},
     },
     {
+      games: ['bomb'],
+      title: { ko: '고양이 폭탄을 넘겨라!', en: 'Pass the cat bomb!' },
+      text: {
+        ko: '심지에 불붙은 <b>고양이 폭탄</b>이 누군가에게 놓여요. 폭탄을 들고 있으면 <b>다른 사람 자리를 탭해서 던지세요.</b> 받자마자 0.5초 뒤부터 다시 던질 수 있어요.',
+        en: 'A <b>cat bomb</b> with a lit fuse lands on someone. When you hold it, <b>tap another player\'s seat to throw it.</b> You can throw again half a second after catching it.',
+      },
+      html: () => '<div class="tut-felt tut-bomb"><span class="tb-seat">🐱</span><span class="tb-bomb">💣</span><span class="tb-seat">😺</span></div>',
+      play() { later(400, () => stage.querySelector('.tb-bomb')?.classList.add('go')); window.SFX && SFX.swoosh(); },
+    },
+    {
+      games: ['bomb'],
+      title: { ko: '고양이 표정을 보세요', en: 'Watch the cat\'s face' },
+      text: {
+        ko: '폭탄이 언제 터질지는 <b>아무도 몰라요.</b> 대신 시간이 갈수록 고양이가 <b>😺 → 😼 → 🙀 → 😾</b> 점점 겁먹고, <b>똑딱 소리가 빨라져요.</b> 표정이 겁먹었으면 망설이지 말고 던지세요!',
+        en: 'Nobody knows <b>when it will blow.</b> But as time passes the cat goes <b>😺 → 😼 → 🙀 → 😾</b> and <b>the ticking speeds up.</b> If it looks scared, throw it now!',
+      },
+      html: () => '<div class="tut-felt tut-bomb faces"><span>😺</span><span>😼</span><span>🙀</span><span>😾</span></div>',
+      play() {},
+    },
+    {
+      games: ['bomb'],
+      title: { ko: '펑! 마지막 고양이가 승리', en: 'BOOM! Last cat wins' },
+      text: {
+        ko: '터지는 순간 <b>들고 있던 사람</b>(날아가는 중이면 <b>받는 사람</b>)이 목숨 1개를 잃고 머리가 뽀글뽀글해져요. 목숨을 다 잃으면 탈락, <b>마지막까지 남은 고양이가 승리!</b> 허세 버튼 😏 으로 약 올리기도 잊지 마세요.',
+        en: 'When it blows, <b>whoever holds it</b> (or <b>whoever it\'s flying to</b>) loses a life and gets a frizzy hairdo. Out of lives = out. <b>Last cat standing wins!</b> Don\'t forget the 😏 taunts.',
+      },
+      html: () => '<div class="tut-felt tut-bomb"><span class="tb-boom">💥</span></div>',
+      play() { window.SFX && SFX.lose(); },
+    },
+    {
       games: ['memory', 'nut'],
       title: { ko: '베팅 라운드', en: 'The betting round' },
       text: {

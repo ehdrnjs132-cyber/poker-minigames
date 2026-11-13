@@ -1123,7 +1123,7 @@ body.chat-open .chat-fab { opacity: 0; pointer-events: none; transform: scale(.8
 #lobby.active ~ #chatFab { display: none; }
 
 #lobby .plaza { flex: 1; min-height: 0; margin: 0; border: 0; border-radius: 0; box-shadow: inset 0 10px 20px rgba(0, 0, 0, .35); height: auto !important; }
-.plaza-world { width: 480px; height: 1480px; }
+.plaza-world { width: 480px; height: 1720px; }
 .plaza-floor::after { display: none; }
 .plaza-floor {
   background:
@@ -1362,3 +1362,71 @@ body.taunt-aim .iseat:not(.me):not(.empty), body.taunt-aim #opps .seat:not(.empt
 .taunt-chips i:nth-child(3) { top: calc(var(--s) * -.95); animation-delay: .2s, 0s; } .taunt-chips i:nth-child(4) { top: calc(var(--s) * -1.05); animation-delay: .3s, 0s; }
 @keyframes tRiffle { 50% { transform: translateX(calc(var(--s) * .3)) translateY(-4px); } }
 @media (max-width: 560px) { .taunt-fab { width: 50px; height: 50px; right: 76px; font-size: 1.5rem; } }
+
+/* ================= Cat Bomb Party ================= */
+#room:not(.game-bomb) #bombTable { display: none; }
+#room.game-bomb .stage { display: none; }
+.bomb-rail { background: radial-gradient(ellipse at 50% 30%, #ffb3c7, #e0648a 55%, #a83a62); box-shadow: 0 30px 60px rgba(0, 0, 0, .6), inset 0 4px 0 rgba(255, 255, 255, .45), inset 0 -6px 12px rgba(0, 0, 0, .35); }
+.bomb-mat { background: radial-gradient(circle at 50% 45%, #8e6bff 0, #6a45d8 45%, #43249a 100%) !important;
+  box-shadow: inset 0 0 0 3px rgba(255, 255, 255, .45), inset 0 0 0 10px rgba(0, 0, 0, .12), inset 0 0 80px rgba(0, 0, 0, .45) !important; }
+.bomb-mat::before { content: ''; position: absolute; inset: 0; opacity: .18; background-image: radial-gradient(circle, #fff 0 2px, transparent 3px); background-size: 34px 34px; }
+.bomb-mat .ip-logo { color: rgba(255, 255, 255, .16); }
+.bomb-center .ipc-status b { font-size: clamp(1.1rem, 2.4vw, 1.7rem); }
+.bomb-center .ipc-status span { color: #ffe1ff; }
+.bomb-count { font-family: var(--num); font-size: clamp(3rem, 8vw, 5.5rem); color: var(--gold-hi); text-shadow: 0 6px 0 rgba(0, 0, 0, .3); animation: bombCount 1s ease-out infinite; }
+@keyframes bombCount { 0% { transform: scale(1.5); opacity: 0; } 30% { transform: scale(1); opacity: 1; } }
+.bomb-round { padding: 3px 12px; border-radius: 999px; background: rgba(0, 0, 0, .3); font-size: .78rem; font-weight: 800; color: #fff; }
+
+.bseat .is-plate .hearts { display: flex; gap: 2px; justify-content: center; font-size: .95rem; }
+.bseat .hearts i { font-style: normal; color: rgba(255, 255, 255, .2); filter: grayscale(1); }
+.bseat .hearts i.on { color: #ff4d6d; filter: none; text-shadow: 0 0 6px rgba(255, 77, 109, .7); }
+.bseat .is-avatar-wrap { margin-top: 22px; }
+.bseat.target { cursor: pointer; }
+.bseat.target .is-avatar { animation: targetPulse .7s ease-in-out infinite; }
+@keyframes targetPulse { 50% { box-shadow: 0 0 0 5px rgba(255, 211, 77, .9), 0 0 26px rgba(255, 211, 77, .9); transform: scale(1.06); } }
+.throw-here { position: absolute; left: 50%; top: -14px; transform: translateX(-50%); padding: 2px 9px; border-radius: 999px; background: #ffd34d; color: #3a2300; font-weight: 900; font-size: .72rem; white-space: nowrap; animation: pzBounce .7s ease-in-out infinite; }
+.afro { position: absolute; left: 50%; top: 50%; width: 120%; height: 120%; transform: translate(-50%, -62%) scale(0); border-radius: 50%; z-index: 0;
+  background: radial-gradient(circle at 30% 30%, #3a3a3a 0 18%, transparent 19%), radial-gradient(circle at 70% 28%, #2a2a2a 0 20%, transparent 21%), radial-gradient(circle at 50% 18%, #333 0 22%, transparent 23%),
+    radial-gradient(circle at 20% 55%, #2d2d2d 0 18%, transparent 19%), radial-gradient(circle at 80% 55%, #2d2d2d 0 18%, transparent 19%), radial-gradient(circle, #262626 0 55%, transparent 56%); transition: transform .35s cubic-bezier(.2, 1.6, .4, 1); }
+.bseat.blasted .afro { transform: translate(-50%, -62%) scale(1); }
+.bseat.blasted .is-avatar { filter: brightness(.55) sepia(.5); }
+.bseat .is-avatar { position: relative; z-index: 1; }
+.bseat.out .is-avatar::after { content: '💀'; position: absolute; inset: 0; display: grid; place-items: center; font-size: 1.8rem; background: rgba(0, 0, 0, .45); }
+
+.bomb-token { position: absolute; z-index: 5; width: clamp(64px, 9vw, 96px); transform: translate(-50%, -118%); pointer-events: none; opacity: 0;
+  transition-property: left, top, opacity; transition-timing-function: cubic-bezier(.3, .1, .3, 1); }
+.bomb-token.show { opacity: 1; }
+.bomb-token .cat-bomb { width: 100%; display: block; filter: drop-shadow(0 8px 10px rgba(0, 0, 0, .5)); animation: cbWobble 1.1s ease-in-out infinite; }
+.bomb-token[data-danger="1"] .cat-bomb { animation-duration: .7s; }
+.bomb-token[data-danger="2"] .cat-bomb { animation-duration: .38s; }
+.bomb-token[data-danger="3"] .cat-bomb { animation: cbPanic .16s linear infinite; filter: drop-shadow(0 0 16px rgba(255, 60, 60, .95)); }
+@keyframes cbWobble { 50% { transform: rotate(-7deg) translateY(-3px); } }
+@keyframes cbPanic { 25% { transform: translate(-2px, 1px) rotate(-5deg); } 75% { transform: translate(2px, -1px) rotate(5deg); } }
+.bomb-token.flying .cat-bomb { animation: cbSpin .65s linear infinite; }
+@keyframes cbSpin { to { transform: rotate(360deg); } }
+.bomb-token.flying { animation: cbArc var(--fly, .65s) ease-in-out; }
+.cb-spark { transform-origin: 79px 13px; animation: cbSpark .25s ease-in-out infinite alternate; }
+@keyframes cbSpark { to { transform: scale(1.5); opacity: .7; } }
+.bomb-token.mine .cat-bomb { filter: drop-shadow(0 0 14px rgba(255, 211, 77, .95)); }
+
+.boom-fx { position: fixed; z-index: 46; pointer-events: none; transform: translate(-50%, -50%); width: 10px; height: 10px; }
+.boom-ring { position: absolute; left: 50%; top: 50%; width: 260px; height: 260px; margin: -130px; border-radius: 50%;
+  background: radial-gradient(circle, #fff 0 12%, #ffd34d 13% 30%, #ff7a1a 31% 48%, rgba(227, 40, 58, .8) 49% 60%, transparent 61%); animation: boomRing .7s ease-out both; }
+.boom-cloud { position: absolute; left: 50%; top: 50%; width: 200px; height: 200px; margin: -100px; border-radius: 50%;
+  background: radial-gradient(circle at 30% 40%, #555 0 20%, transparent 21%), radial-gradient(circle at 70% 35%, #444 0 22%, transparent 23%), radial-gradient(circle at 50% 70%, #4a4a4a 0 25%, transparent 26%); animation: boomCloud 1.8s ease-out both; }
+.boom-fx b { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); font-family: var(--display); font-size: 3.4rem; color: #fff; -webkit-text-stroke: 3px #e3283a; text-shadow: 0 6px 0 #7a0612; white-space: nowrap; animation: boomWord 1.4s cubic-bezier(.2, 1.6, .4, 1) both; }
+@keyframes boomRing { from { transform: scale(.1); opacity: 1; } to { transform: scale(1.3); opacity: 0; } }
+@keyframes boomCloud { 0% { transform: scale(.2); opacity: 0; } 25% { opacity: .9; } 100% { transform: scale(1.4) translateY(-30px); opacity: 0; } }
+@keyframes boomWord { 0% { transform: translate(-50%, -50%) scale(.2) rotate(-15deg); } 25% { transform: translate(-50%, -90%) scale(1.25) rotate(6deg); } 70% { transform: translate(-50%, -90%) scale(1); opacity: 1; } 100% { transform: translate(-50%, -120%); opacity: 0; } }
+#room.shake { animation: roomShake .5s; }
+@keyframes roomShake { 15% { transform: translate(-8px, 4px); } 30% { transform: translate(7px, -5px); } 45% { transform: translate(-6px, -3px); } 60% { transform: translate(5px, 4px); } 80% { transform: translate(-2px, 1px); } }
+.hint.bomb-hot { color: #ffd34d; font-weight: 900; font-size: 1.05rem; animation: pulse .8s infinite; }
+
+/* plaza pad + tutorial */
+.pad[data-pad="bomb"] { background: radial-gradient(ellipse at 50% 30%, #8e6bff, #43249a 70%); }
+.pm-bombcat { font-size: 2.6rem; filter: drop-shadow(0 4px 4px rgba(0, 0, 0, .4)); }
+.tut-bomb { display: flex; align-items: center; justify-content: space-around; min-height: 150px; font-size: 3rem; position: relative; }
+.tut-bomb .tb-bomb { position: absolute; left: 22%; top: 30%; transition: left .7s cubic-bezier(.3, .1, .3, 1), transform .7s; }
+.tut-bomb .tb-bomb.go { left: 68%; transform: rotate(360deg); }
+.tut-bomb.faces span { animation: tPop 2.4s both; }
+.tut-bomb .tb-boom { font-size: 5rem; animation: boomWord 1.4s both; position: static; }

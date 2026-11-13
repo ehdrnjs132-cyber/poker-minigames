@@ -20,6 +20,7 @@
   let dealKey = null;
   let boardKey;
   let lastTick = null;
+  let lastStateAt = Date.now();
   let bannerTimer = null;
 
   document.addEventListener('pointerdown', () => SFX.unlock(), { once: true });
@@ -164,7 +165,7 @@
   // ---- create-room settings modal (last choice remembered per browser)
   const setupEl = $('#setup');
   let setupGame = null;
-  let settings = { players: 4, memorizeSec: 30, pickSec: 20, turnSec: 20, betting: 'on', swaps: 5, speed: 'normal' };
+  let settings = { players: 4, memorizeSec: 30, pickSec: 20, turnSec: 20, betting: 'on', lives: 3, swaps: 5, speed: 'normal' };
   try { Object.assign(settings, JSON.parse(pref.get('roomSettings')) || {}); } catch {}
 
   function renderSetup() {
@@ -363,6 +364,7 @@
   });
   socket.on('state', (st) => {
     offset = st.now - Date.now();
+    lastStateAt = Date.now();
     P = S;
     S = st;
     window.currentGameId = st.gameId;
@@ -455,7 +457,7 @@
     }
     const ctx = { me, opp, opps, inResult, hlCards };
     $('#roomCode').textContent = S.code;
-    $('#roundInfo').textContent = S.round ? `${S.round}/${S.maxRounds}` : '-';
+    $('#roundInfo').textContent = S.round ? (S.maxRounds ? `${S.round}/${S.maxRounds}` : String(S.round)) : '-';
     $('#anteInfo').textContent = S.ante ? fmt(S.ante) : '-';
     $('#potInfo').textContent = fmt(inResult && S.result ? S.result.pot : S.pot);
     const watchers = S.spectators || [];
@@ -464,6 +466,16 @@
     $('#watchInfo').title = watchers.map((w) => w.name).join(', ');
     $('#room').classList.toggle('watching', !!S.spectator);
     $('#room').classList.toggle('game-indian', S.game === 'indian');
+    $('#room').classList.toggle('game-bomb', S.game === 'bomb');
+
+    if (S.game === 'bomb') {
+      renderBomb();
+      renderActions(ctx);
+      renderOverlay(ctx);
+      if (S.phase === 'gameover' && P?.phase !== 'gameover' && S.final?.championId === S.me) SFX.fanfare();
+      if (S.notice && JSON.stringify(S.notice) !== JSON.stringify(P?.notice)) toast(I18N.msg(S.notice), 3500);
+      return;
+    }
 
     if (S.game === 'indian') {
       renderIndian(ctx);
@@ -991,6 +1003,199 @@
   }
 
 
+
+  // ============================================================ Cat Bomb Party
+  // Party mat with seats around it; a cat-shaped bomb sits on the holder and
+  // flies to whoever they tap. Its face gets more scared as the fuse burns.
+  let bombBoomKey = null;
+  let bombTickAt = 0;
+
+  function catBombSVG(danger) {
+    const faces = [
+      // 0: happy ^ ^
+      '<path d="M37 64q4-5 8 0M55 64q4-5 8 0" fill="none" stroke="#fff" stroke-width="3" stroke-linecap="round"/><path d="M45 74q5 4 10 0" fill="none" stroke="#fff" stroke-width="2.6" stroke-linecap="round"/>',
+      // 1: alert o o
+      '<circle cx="41" cy="64" r="4.2" fill="#fff"/><circle cx="59" cy="64" r="4.2" fill="#fff"/><circle cx="41" cy="65" r="2" fill="#1b1b2b"/><circle cx="59" cy="65" r="2" fill="#1b1b2b"/><path d="M46 75h8" stroke="#fff" stroke-width="2.6" stroke-linecap="round"/>',
+      // 2: scared O O + sweat
+      '<circle cx="41" cy="63" r="6" fill="#fff"/><circle cx="59" cy="63" r="6" fill="#fff"/><circle cx="41" cy="64" r="2.4" fill="#1b1b2b"/><circle cx="59" cy="64" r="2.4" fill="#1b1b2b"/><ellipse cx="50" cy="76" rx="4" ry="3.4" fill="#fff"/><path d="M70 50q4 6 0 9q-4-3 0-9z" fill="#7fd4ff"/>',
+      // 3: panic > <
+      '<path d="M35 58l10 6-10 6M65 58l-10 6 10 6" fill="none" stroke="#fff" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"/><path d="M42 78q8-9 16 0z" fill="#fff"/><path d="M70 48q4 6 0 9q-4-3 0-9zM27 50q4 6 0 9q-4-3 0-9z" fill="#7fd4ff"/>',
+    ];
+    return `<svg class="cat-bomb d${danger}" viewBox="0 0 100 104" aria-hidden="true">
+      <path class="cb-fuse" d="M58 26q8-14 20-12" fill="none" stroke="#c9a26b" stroke-width="4" stroke-linecap="round"/>
+      <g class="cb-spark"><circle cx="79" cy="13" r="6" fill="#ffd34d"/><circle cx="79" cy="13" r="3" fill="#fff"/></g>
+      <path d="M24 44L28 18 44 34Z M76 44L72 18 56 34Z" fill="#2b2b3d" stroke="#14141f" stroke-width="2" stroke-linejoin="round"/>
+      <path d="M29 36l2-11 7 7z M71 36l-2-11-7 7z" fill="#ff9fb1"/>
+      <circle cx="50" cy="64" r="34" fill="#2b2b3d" stroke="#14141f" stroke-width="2.5"/>
+      <ellipse cx="38" cy="50" rx="9" ry="6" fill="rgba(255,255,255,.18)" transform="rotate(-25 38 50)"/>
+      <rect x="44" y="27" width="12" height="9" rx="2" fill="#5a5a72"/>
+      <ellipse cx="31" cy="73" rx="5" ry="3" fill="#ff7b9c" opacity=".55"/><ellipse cx="69" cy="73" rx="5" ry="3" fill="#ff7b9c" opacity=".55"/>
+      ${faces[Math.max(0, Math.min(3, danger || 0))]}
+    </svg>`;
+  }
+
+  function bombBuild() {
+    const box = $('#bombTable');
+    if (box._built) return;
+    box._built = true;
+    box.innerHTML = `
+      <div class="ip-oval bomb-oval" id="bOval">
+        <div class="ip-rail bomb-rail"></div>
+        <div class="ip-felt bomb-mat"><div class="ip-logo">CAT BOMB PARTY</div></div>
+        <div class="ip-center bomb-center" id="bCenter"></div>
+        <div class="ip-seats" id="bSeats"></div>
+        <div class="bomb-token" id="bToken"></div>
+      </div>
+      <div class="ip-bar" id="bombActions"></div>`;
+    $('#bombActions').addEventListener('click', onActionClick);
+    $('#bSeats').addEventListener('click', (e) => {
+      const rm = e.target.closest('[data-act="removeBot"]');
+      if (rm) { SFX.click(); return act('removeBot', { id: rm.dataset.id }); }
+      if (document.body.classList.contains('taunt-aim')) return;
+      const seat = e.target.closest('.iseat[data-id]');
+      if (!seat || !S || S.game !== 'bomb' || S.holder !== S.me || S.flight) return;
+      if (seat.dataset.id === S.me || seat.classList.contains('out') || seat.dataset.id === 'empty') return;
+      if (S.heldFor + (Date.now() - lastStateAt) < (S.catchMs || 500)) return;
+      SFX.swoosh();
+      act('pass', { target: seat.dataset.id });
+    });
+  }
+
+  function renderBomb() {
+    bombBuild();
+    const oval = $('#bOval');
+    const tall = oval.clientHeight > oval.clientWidth;
+    const slots = IP_SLOTS[tall ? 'tall' : 'wide'];
+    const seated = ipSeatOrder();
+    const order = IP_ORDER[Math.max(1, seated.length)];
+    const box = $('#bSeats');
+    const wanted = new Set();
+    const pos = {};
+    const ph = S.phase;
+    const iHold = S.holder === S.me && ph === 'play' && !S.flight;
+
+    seated.forEach((p, i) => {
+      const [x, y] = slots[order[i]];
+      const id = p ? p.id : 'empty';
+      pos[id] = [x, y];
+      wanted.add(id);
+      let el = box.querySelector(`.iseat[data-id="${id}"]`);
+      if (!el) {
+        el = document.createElement('div');
+        el.dataset.id = id;
+        box.appendChild(el);
+      }
+      el.style.left = `${x}%`;
+      el.style.top = `${y}%`;
+      if (!p) {
+        el.className = 'iseat bseat empty';
+        setHTML(el, `<div class="is-avatar-wrap"><div class="is-avatar avatar empty-av">+</div></div><div class="is-plate"><b class="dots">${t('seat.waiting')}</b></div>`);
+        return;
+      }
+      const isMe = p.id === S.me;
+      const blasted = S.lastBoom?.victim === p.id && (ph === 'boom' || ph === 'play' || ph === 'gameover');
+      const target = iHold && !isMe && !p.out;
+      el.className = `iseat bseat${isMe ? ' me' : ''}${p.out ? ' out' : ''}${S.holder === p.id ? ' holding' : ''}${blasted ? ' blasted' : ''}${target ? ' target' : ''}`;
+      const hearts = Array.from({ length: S.settings.lives }, (_, k) => `<i class="${k < p.lives ? 'on' : ''}">❤</i>`).join('');
+      let badge = '';
+      if (ph === 'lobby' || ph === 'gameover') badge = p.ready ? `<span class="badge ok">${t('badge.ready')}</span>` : `<span class="badge">${t('badge.wait')}</span>`;
+      else if (p.out) badge = `<span class="badge warn">${t('bomb.outBadge')}</span>`;
+      else if (!p.connected) badge = `<span class="badge warn">${t('badge.off')}</span>`;
+      const botTag = p.bot ? `<span class="bot-tag">BOT·${t(`lvl.${p.bot}`)}</span>` : '';
+      const removeBtn = p.bot && ph === 'lobby' ? `<button class="seat-x" data-act="removeBot" data-id="${p.id}" aria-label="${t('bot.remove')}">×</button>` : '';
+      setHTML(el, `${removeBtn}
+        <div class="is-avatar-wrap">
+          <span class="afro" aria-hidden="true"></span>
+          <div class="is-avatar avatar${p.connected ? '' : ' off'}" style="background:${colorFor(p.id)}">${avatarInner(p)}</div>
+          ${target ? `<span class="throw-here">${t('bomb.throwHere')}</span>` : ''}
+        </div>
+        <div class="is-plate"><b>${esc(p.name)}${isMe ? `<em>${t('me')}</em>` : ''}</b><span class="hearts">${hearts}</span>${botTag}</div>
+        <div class="is-badges">${badge}</div>`);
+    });
+    [...box.children].forEach((el) => !wanted.has(el.dataset.id) && el.remove());
+
+    // The bomb: on the holder, or flying to the target.
+    const token = $('#bToken');
+    const at = S.flight ? pos[S.flight.to] : pos[S.holder] || (S.lastBoom && pos[S.lastBoom.victim]);
+    const showToken = !!at && (ph === 'countdown' || ph === 'play');
+    token.classList.toggle('show', showToken);
+    token.classList.toggle('flying', !!S.flight);
+    token.classList.toggle('mine', iHold);
+    if (at) {
+      token.style.transitionDuration = S.flight ? `${Math.max(120, S.flight.left)}ms` : '350ms';
+      token.style.left = `${at[0]}%`;
+      token.style.top = `${at[1]}%`;
+    }
+    const danger = ph === 'countdown' ? 0 : S.danger || 0;
+    if (token._d !== danger || !token.innerHTML) { token._d = danger; token.innerHTML = catBombSVG(danger); }
+    token.dataset.danger = String(danger);
+
+    // Boom!
+    const boomKey = ph === 'boom' && S.lastBoom ? `${S.lastBoom.victim}:${S.lastBoom.at}` : null;
+    if (boomKey && boomKey !== bombBoomKey) {
+      bombBoomKey = boomKey;
+      const seat = box.querySelector(`.iseat[data-id="${S.lastBoom.victim}"] .is-avatar-wrap`);
+      if (seat) {
+        const r = seat.getBoundingClientRect();
+        const fx = document.createElement('div');
+        fx.className = 'boom-fx';
+        fx.innerHTML = `<i class="boom-ring"></i><i class="boom-cloud"></i><b>${t('bomb.boomWord')}</b>`;
+        fx.style.left = `${r.left + r.width / 2}px`;
+        fx.style.top = `${r.top + r.height / 2}px`;
+        document.body.appendChild(fx);
+        setTimeout(() => fx.remove(), 1800);
+      }
+      $('#room').classList.remove('shake');
+      reflow($('#room'));
+      $('#room').classList.add('shake');
+      SFX.shuffle(); SFX.lose();
+      if (S.lastBoom.victim === S.me && navigator.vibrate) navigator.vibrate([120, 60, 200]);
+    }
+
+    setHTML($('#bCenter'), bombCenterHTML());
+  }
+
+  function bombCenterHTML() {
+    const ph = S.phase;
+    const nameOf = (id) => S.players.find((p) => p.id === id)?.name || '';
+    let label = '';
+    let sub = '';
+    if (ph === 'lobby') {
+      label = S.players.length > 1 ? t('ph.lobbyReady') : t('ph.lobbyWait');
+      sub = t('bomb.rules', { n: S.settings.lives });
+    } else if (ph === 'countdown') {
+      label = t('bomb.getReady');
+      sub = t('bomb.firstHolder', { name: nameOf(S.holder) });
+    } else if (ph === 'play') {
+      if (S.flight) label = t('bomb.flying', { name: nameOf(S.flight.to) });
+      else if (S.holder === S.me) label = t('bomb.youHold');
+      else label = t('bomb.holds', { name: nameOf(S.holder) });
+      sub = [t('bomb.d0'), t('bomb.d1'), t('bomb.d2'), t('bomb.d3')][S.danger || 0];
+    } else if (ph === 'boom') {
+      const v = S.lastBoom?.victim;
+      label = v === S.me ? t('bomb.boomMe') : t('bomb.boomOther', { name: nameOf(v) });
+      sub = S.lastBoom?.out ? t('bomb.outLine', { name: nameOf(v) }) : t('bomb.lifeLine');
+    } else if (ph === 'gameover') {
+      label = t('ph.gameover');
+    }
+    const count = ph === 'countdown' && S.deadline ? Math.max(1, Math.ceil((S.deadline - (Date.now() + offset)) / 1000)) : '';
+    return `<div class="ipc-status"><b>${esc(label)}</b><span>${esc(sub)}</span></div>
+      ${count ? `<div class="bomb-count">${count}</div>` : ''}
+      ${ph === 'play' || ph === 'boom' ? `<div class="bomb-round">${t('bomb.round', { n: S.round })}</div>` : ''}`;
+  }
+
+  function bombActionsHTML(me) {
+    const ph = S.phase;
+    if (me.out) return `<span class="hint">${t('bomb.outHint')}</span>`;
+    if (ph === 'countdown') return `<span class="hint">${t('bomb.howTo')}</span>`;
+    if (ph === 'play') {
+      if (S.holder === S.me && !S.flight) return `<span class="hint bomb-hot">${t('bomb.tapSomeone')}</span>`;
+      return `<span class="hint">${t('bomb.waitHint')}</span>`;
+    }
+    if (ph === 'boom') return `<span class="hint">${t('bomb.nextBomb')}</span>`;
+    return '';
+  }
+
   // ---------------------------------------------------------- winner spotlight
   // Once per showdown: a full-screen moment naming who won and with what.
   const CROWN = '<svg viewBox="0 0 64 44" aria-hidden="true"><defs><linearGradient id="spG" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#fff2b8"/><stop offset=".5" stop-color="#f5c451"/><stop offset="1" stop-color="#a06c17"/></linearGradient></defs><path d="M4 14l14 10L32 4l14 20 14-10-6 26H10z" fill="url(#spG)" stroke="#6b450c" stroke-width="2" stroke-linejoin="round"/><circle cx="32" cy="4" r="4" fill="#e3283a"/><circle cx="4" cy="14" r="3.5" fill="#2f7bff"/><circle cx="60" cy="14" r="3.5" fill="#2f7bff"/></svg>';
@@ -1166,7 +1371,7 @@
   }
 
   function renderActions({ me, opp }) {
-    const bar = S.game === 'indian' ? $('#ipActions') : $('#actionBar');
+    const bar = S.game === 'indian' ? $('#ipActions') : S.game === 'bomb' ? $('#bombActions') : $('#actionBar');
     if (!me) return setHTML(bar, spectatorActions());
     const ph = S.phase;
     let html = '';
@@ -1183,6 +1388,8 @@
           ${full ? '' : `<button class="btn ghost" data-act="invite">${t('invite.copy')}</button>`}
           <button class="btn ${me.ready ? 'ghost' : 'gold'} big" data-act="ready" ${opp ? '' : 'disabled'}>${me.ready ? t('act.unready') : t('act.ready')}</button>
         </div>${bots}`;
+    } else if (S.game === 'bomb' && ph !== 'gameover') {
+      html = bombActionsHTML(me);
     } else if (ph === 'bet') {
       html = S.game === 'indian' ? ipBetActions(me) : betActions(me);
     } else if (ph === 'memorize') {
@@ -1247,12 +1454,12 @@
     const won = championId === S.me;
     const draw = championId === null;
     const title = draw ? t('go.draw') : won ? t('go.win') : t('go.lose');
-    const reasonText = reason === 'bust' ? t('go.bust') : t('go.rounds', { n: S.maxRounds });
+    const reasonText = reason === 'bomb' ? t('go.bomb') : reason === 'bust' ? t('go.bust') : t('go.rounds', { n: S.maxRounds });
     const ratingOf = (pid) => (S.final.ratings || []).find((r) => r.pid === pid);
     const rows = standings.map((s, i) => {
       const r = ratingOf(s.id);
       const pts = r ? `<span class="rp ${r.delta >= 0 ? 'up' : 'down'}">${r.delta >= 0 ? '+' : ''}${r.delta}</span>` : '';
-      return `<div class="${i === 0 && !draw ? 'top' : ''}"><span class="rk">${i + 1}</span><span class="nm">${esc(s.name)}${s.id === S.me ? t('meSuffix') : ''}${s.bot ? ` <small class="bot-tag">BOT·${t(`lvl.${s.bot}`)}</small>` : ''}</span>${pts}<span class="ch">${fmt(s.chips)}</span></div>`;
+      return `<div class="${i === 0 && !draw ? 'top' : ''}"><span class="rk">${i + 1}</span><span class="nm">${esc(s.name)}${s.id === S.me ? t('meSuffix') : ''}${s.bot ? ` <small class="bot-tag">BOT·${t(`lvl.${s.bot}`)}</small>` : ''}</span>${pts}<span class="ch">${s.display ?? fmt(s.chips)}</span></div>`;
     }).join('');
     const myRating = ratingOf(S.me);
     const others = S.players.filter((p) => p.id !== S.me);
@@ -1326,6 +1533,10 @@
   const CIRC = 2 * Math.PI * 19;
   function tick() {
     requestAnimationFrame(tick);
+    if (S && S.game === 'bomb' && S.phase === 'play' && $('#room').classList.contains('active')) {
+      const gap = [900, 600, 340, 170][S.danger || 0];
+      if (Date.now() - bombTickAt > gap) { bombTickAt = Date.now(); SFX.tick(); }
+    }
     if (!S || !S.deadline) {
       timerEl.classList.add('hidden');
       return;
@@ -1336,6 +1547,7 @@
     timerEl.classList.remove('hidden');
     timerNum.textContent = sec;
     const ring = S.game === 'indian' && document.querySelector('.iseat.turn .is-ring circle');
+    if (S.game === 'bomb' && S.phase === 'countdown') setHTML($('#bCenter'), bombCenterHTML());
     if (ring) ring.style.strokeDashoffset = String(289 * (1 - left / total));
     timerBar.style.strokeDashoffset = String(CIRC * (1 - left / total));
     const urgent = (S.phase === 'memorize' || S.phase === 'pick' || (S.phase === 'bet' && S.turn === S.me)) && sec <= 5;

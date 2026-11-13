@@ -134,6 +134,7 @@
 
     <!-- Indian Poker has its own table (built by app.js) -->
     <div id="ipTable" class="ip-table"></div>
+    <div id="bombTable" class="ip-table bomb-table"></div>
 
     <div id="spotlight" class="spotlight" role="status" aria-live="polite"></div>
     <div id="overlay" class="overlay"></div>
@@ -202,6 +203,12 @@
         </div>
         <input type="range" min="5" max="60" step="1" data-key="pickSec" data-i18n-label="setup.pick" />
       </div>
+      <div class="setting" data-only="bomb">
+        <div class="setting-head"><b data-i18n="setup.lives">목숨</b><span data-i18n="setup.livesHint">다 잃으면 탈락</span></div>
+        <div class="seg seg-4" data-key="lives">
+          <button data-v="1">1</button><button data-v="2">2</button><button data-v="3">3</button><button data-v="5">5</button>
+        </div>
+      </div>
       <div class="result-actions">
         <button class="btn ghost" id="setupCancel" data-i18n="cancel">취소</button>
         <button class="btn gold big" id="setupCreate" data-i18n="cta.create">방 만들기</button>
@@ -220,6 +227,7 @@
         <button data-g="memory" data-i18n="game.memory">기억 포커</button>
         <button data-g="nut" data-i18n="game.nut">너트 레이스</button>
         <button data-g="indian" data-i18n="game.indian">인디언 포커</button>
+        <button data-g="bomb" data-i18n="game.bomb">고양이 폭탄 파티</button>
       </div>
       <div class="rank-list" id="rankList"></div>
       <div class="rank-me" id="rankMe"></div>
