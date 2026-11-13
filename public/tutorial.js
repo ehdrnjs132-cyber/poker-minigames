@@ -239,6 +239,36 @@ const Tutorial = (() => {
       play() {},
     },
     {
+      games: ['liar'],
+      title: { ko: '숫자를 말하며 카드 내기', en: 'Claim a rank, play cards' },
+      text: {
+        ko: '모두 7장으로 시작해요. 차례마다 <b>말해야 할 숫자</b>가 정해져 있어요(A → 2 → … → K). 내 차례에 카드를 <b>1~3장 뒤집어 내며</b> "이번 숫자 N장!"이라고 말해요. 그 숫자가 없으면? <b>거짓말해도 돼요!</b>',
+        en: 'Everyone starts with 7 cards. Each turn has a <b>rank to claim</b> (A → 2 → … → K). Play <b>1–3 cards face down</b> and claim they\'re all that rank. Don\'t have it? <b>Lie!</b>',
+      },
+      html: () => '<div class="tut-felt tut-bomb"><span class="tb-seat">🃏🃏</span><span style="font-size:1.6rem;font-weight:900">"7 ×2!"</span><span class="tb-seat">🤔</span></div>',
+      play() { window.SFX && SFX.deal(); },
+    },
+    {
+      games: ['liar'],
+      title: { ko: '"거짓말!"을 외쳐요', en: 'Shout "Liar!"' },
+      text: {
+        ko: '카드가 나오면 <b>4.5초 안에</b> 다른 사람이 <b>"거짓말!"</b>을 누를 수 있어요. 카드를 공개해서 <b>거짓말이면 낸 사람이</b>, <b>진짜였으면 의심한 사람이</b> 바닥 카드를 전부 가져가요. 내가 그 숫자를 3장 들고 있는데 상대가 2장이라고 했다면? 확실한 거짓말!',
+        en: 'After a play anyone has <b>4.5 seconds</b> to hit <b>"Liar!"</b>. The cards are revealed: <b>if it was a lie the player</b>, <b>if it was true the accuser</b>, takes the whole pile. Holding three 7s while they claim two? Definitely a lie!',
+      },
+      html: () => '<div class="tut-felt tut-bomb"><span style="font-size:2.4rem">🤥</span><span class="l-call-demo">거짓말!</span></div>',
+      play() { window.SFX && SFX.spotlight(); },
+    },
+    {
+      games: ['liar'],
+      title: { ko: '코를 잘 보세요', en: 'Watch the noses' },
+      text: {
+        ko: '들킬 때마다 <b>코가 쭉 길어지고 그대로 남아요.</b> 그리고 카드를 낼 때마다 코가 <b>움찔</b>하는데, 거짓말이면 조금 더 크게 움찔해요. 눈치 싸움! <b>카드를 먼저 다 털어내면 승리</b>예요.',
+        en: 'Every time you\'re caught <b>your nose grows, for good.</b> And whenever someone plays, their nose <b>twitches</b> — a bit more when lying. Read it! <b>Empty your hand first to win.</b>',
+      },
+      html: () => '<div class="tut-felt tut-bomb"><span class="tut-nose">🙂<i></i></span></div>',
+      play() {},
+    },
+    {
       games: ['bomb'],
       title: { ko: '고양이 폭탄을 넘겨라!', en: 'Pass the cat bomb!' },
       text: {

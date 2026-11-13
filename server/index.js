@@ -9,6 +9,7 @@ const GAMES = {
   nut: require('./games/nutRace'),
   indian: require('./games/indianPoker'),
   bomb: require('./games/bombParty'),
+  liar: require('./games/pinocchio'),
 };
 const Bots = require('./bots');
 const store = require('./store');
@@ -196,7 +197,7 @@ function announceOnline() {
 
 // ---- lobby plaza: everyone in the lobby walks around as a character -------
 const PLAZA_W = 480;
-const PLAZA_H = 1720;
+const PLAZA_H = 1960;
 const plaza = new Map(); // socket.id -> { x, y, d, m }
 let plazaDirty = false;
 function plazaList() {

@@ -422,6 +422,7 @@
       return SFX.click();
     }
     if (a === 'raiseTo') { SFX.chips(); return act('raise', { to: ipRaiseTo }); }
+    if (a === 'liarPlay') { SFX.deal(); const cards = [...liarSel]; liarSel.clear(); return act('play', { cards }); }
     if (a === 'invite') return copyInvite();
     if (a === 'exit') return $('#leaveBtn').click();
     if (a === 'lock') SFX.lock(); else SFX.click();
@@ -467,6 +468,15 @@
     $('#room').classList.toggle('watching', !!S.spectator);
     $('#room').classList.toggle('game-indian', S.game === 'indian');
     $('#room').classList.toggle('game-bomb', S.game === 'bomb');
+    $('#room').classList.toggle('game-liar', S.game === 'liar');
+
+    if (S.game === 'liar') {
+      renderLiar();
+      renderActions(ctx);
+      renderOverlay(ctx);
+      if (S.notice && JSON.stringify(S.notice) !== JSON.stringify(P?.notice)) toast(I18N.msg(S.notice), 3500);
+      return;
+    }
 
     if (S.game === 'bomb') {
       renderBomb();
@@ -1196,6 +1206,165 @@
     return '';
   }
 
+
+  // ============================================================ Pinocchio Liar's Cards
+  // A wooden workshop table; every character wears a Pinocchio nose that grows
+  // each time they're caught lying, and twitches whenever they play.
+  const liarSel = new Set();
+  let liarSelKey = '';
+  let liarFxKey = '';
+  const rankName = (r) => (r === 'T' ? '10' : r);
+
+  function liarBuild() {
+    const box = $('#liarTable');
+    if (box._built) return;
+    box._built = true;
+    box.innerHTML = `
+      <div class="ip-oval liar-oval" id="lOval">
+        <div class="ip-rail liar-rail"></div>
+        <div class="ip-felt liar-felt"><div class="ip-logo">PINOCCHIO</div></div>
+        <div class="ip-center liar-center" id="lCenter"></div>
+        <div class="ip-seats" id="lSeats"></div>
+      </div>
+      <div class="ip-bar liar-bar" id="liarActions"></div>`;
+    $('#liarActions').addEventListener('click', (e) => {
+      const c = e.target.closest('[data-card]');
+      if (c) {
+        const code = c.dataset.card;
+        if (liarSel.has(code)) liarSel.delete(code);
+        else if (liarSel.size < (S.maxPlay || 3)) liarSel.add(code);
+        else return toast(t('liar.max', { n: S.maxPlay || 3 }));
+        SFX.select();
+        return render();
+      }
+      onActionClick(e);
+    });
+    $('#lSeats').addEventListener('click', (e) => {
+      const rm = e.target.closest('[data-act="removeBot"]');
+      if (rm) { SFX.click(); act('removeBot', { id: rm.dataset.id }); }
+    });
+  }
+
+  function renderLiar() {
+    liarBuild();
+    const oval = $('#lOval');
+    const tall = oval.clientHeight > oval.clientWidth;
+    const slots = IP_SLOTS[tall ? 'tall' : 'wide'];
+    const seated = ipSeatOrder();
+    const order = IP_ORDER[Math.max(1, seated.length)];
+    const box = $('#lSeats');
+    const wanted = new Set();
+    const ph = S.phase;
+    const lp = S.lastPlay;
+    const rv = S.reveal;
+
+    // selection resets every turn / when the hand changes
+    const key = `${S.dealId}:${(S.myHand || []).join(',')}`;
+    if (key !== liarSelKey) { liarSelKey = key; for (const c of [...liarSel]) if (!(S.myHand || []).includes(c)) liarSel.delete(c); if (ph !== 'play') liarSel.clear(); }
+
+    seated.forEach((p, i) => {
+      const [x, y] = slots[order[i]];
+      const id = p ? p.id : 'empty';
+      wanted.add(id);
+      let el = box.querySelector(`.iseat[data-id="${id}"]`);
+      if (!el) { el = document.createElement('div'); el.dataset.id = id; box.appendChild(el); }
+      el.style.left = `${x}%`;
+      el.style.top = `${y}%`;
+      if (!p) {
+        el.className = 'iseat lseat empty';
+        setHTML(el, `<div class="is-avatar-wrap"><div class="is-avatar avatar empty-av">+</div></div><div class="is-plate"><b class="dots">${t('seat.waiting')}</b></div>`);
+        return;
+      }
+      const isMe = p.id === S.me;
+      const turn = ph === 'play' && S.turn === p.id;
+      const twitch = ph === 'window' && lp?.by === p.id ? ` w${lp.wiggle}` : '';
+      const caught = ph === 'reveal' && rv?.lied && rv.by === p.id;
+      el.className = `iseat lseat${isMe ? ' me' : ''}${turn ? ' turn' : ''}${x > 55 ? ' face-left' : ''}${caught ? ' caught' : ''}`;
+      const fan = Array.from({ length: Math.min(p.cards, 10) }, (_, k) => `<i style="--k:${k - Math.min(p.cards, 10) / 2}"></i>`).join('');
+      let badge = '';
+      if (ph === 'lobby' || ph === 'gameover') badge = p.ready ? `<span class="badge ok">${t('badge.ready')}</span>` : `<span class="badge">${t('badge.wait')}</span>`;
+      else if (turn) badge = `<span class="badge think dots">${t('ip.thinking')}</span>`;
+      else if (!p.connected) badge = `<span class="badge warn">${t('badge.off')}</span>`;
+      else if (ph === 'window' && lp?.by === p.id) badge = `<span class="badge hand">${t('liar.saysBadge', { r: rankName(lp.claim), n: lp.count })}</span>`;
+      else if (ph === 'reveal' && rv?.taker === p.id) badge = `<span class="badge warn">${t('liar.tookBadge', { n: rv.pileSize })}</span>`;
+      const botTag = p.bot ? `<span class="bot-tag">BOT·${t(`lvl.${p.bot}`)}</span>` : '';
+      const removeBtn = p.bot && ph === 'lobby' ? `<button class="seat-x" data-act="removeBot" data-id="${p.id}" aria-label="${t('bot.remove')}">×</button>` : '';
+      setHTML(el, `${removeBtn}
+        <div class="l-fan">${fan}<b>${p.cards}</b></div>
+        <div class="is-avatar-wrap">
+          <svg class="is-ring" viewBox="0 0 100 100" aria-hidden="true"><circle cx="50" cy="50" r="46"/></svg>
+          <div class="is-avatar avatar${p.connected ? '' : ' off'}" style="background:${colorFor(p.id)}">${avatarInner(p)}</div>
+          <span class="nose${twitch}" style="--len:${14 + p.nose * 13}px"><i></i></span>
+        </div>
+        <div class="is-plate"><b>${esc(p.name)}${isMe ? `<em>${t('me')}</em>` : ''}</b><span>🤥 ${p.nose} · 🃏 ${p.cards}</span>${botTag}</div>
+        <div class="is-badges">${badge}</div>`);
+    });
+    [...box.children].forEach((el) => !wanted.has(el.dataset.id) && el.remove());
+
+    setHTML($('#lCenter'), liarCenterHTML());
+
+    // sounds / effects once per event
+    const fxKey = `${ph}:${S.dealId}`;
+    if (fxKey !== liarFxKey) {
+      liarFxKey = fxKey;
+      if (ph === 'window') SFX.deal();
+      if (ph === 'play' && S.turn === S.me) SFX.select();
+      if (ph === 'reveal' && rv) {
+        SFX.spotlight();
+        setTimeout(() => (rv.lied ? SFX.lose() : SFX.win()), 450);
+        const center = $('#lCenter');
+        if (center) {
+          center.classList.remove('flash-lie', 'flash-true');
+          reflow(center);
+          center.classList.add(rv.lied ? 'flash-lie' : 'flash-true');
+        }
+      }
+      if (ph === 'gameover' && S.final?.championId === S.me) SFX.fanfare();
+    }
+  }
+
+  function liarCenterHTML() {
+    const ph = S.phase;
+    const nameOf = (id) => S.players.find((p) => p.id === id)?.name || '';
+    const lp = S.lastPlay;
+    const rv = S.reveal;
+    const pile = Math.min(12, S.pileCount || 0);
+    const pileHTML = `<div class="l-pile">${Array.from({ length: pile }, (_, k) => `<i style="--k:${k}"></i>`).join('')}<b>${S.pileCount || 0}</b></div>`;
+    if (ph === 'lobby') return `<div class="ipc-status"><b>${S.players.length > 1 ? t('ph.lobbyReady') : t('ph.lobbyWait')}</b><span>${t('liar.rules')}</span></div>`;
+    if (ph === 'gameover') return `<div class="ipc-status"><b>${t('ph.gameover')}</b></div>`;
+    if (ph === 'reveal' && rv) {
+      const cards = rv.cards.map((c) => cardHTML(c, '', { cls: `l-rev${c[0] === rv.claim ? ' ok' : ' bad'}` })).join('');
+      return `<div class="l-verdict ${rv.lied ? 'lie' : 'true'}">${rv.lied ? t('liar.caught', { name: esc(nameOf(rv.by)) }) : t('liar.wasTrue', { name: esc(nameOf(rv.by)) })}</div>
+        <div class="l-revealed">${cards}</div>
+        <div class="ipc-status"><span>${t('liar.takes', { name: esc(nameOf(rv.taker)), n: rv.pileSize })}</span></div>`;
+    }
+    const claim = ph === 'window' && lp ? `<div class="l-claim"><b>${esc(nameOf(lp.by))}</b> ${t('liar.claims', { r: rankName(lp.claim), n: lp.count })}</div>` : '';
+    const sub = ph === 'play' ? (S.turn === S.me ? t('liar.yourTurn') : t('liar.turnOf', { name: nameOf(S.turn) })) : ph === 'window' ? t('liar.windowHint') : '';
+    return `<div class="l-target"><span>${t('liar.target')}</span><b>${rankName(S.target)}</b><small>${t('liar.next', { r: rankName(S.nextTarget) })}</small></div>
+      ${pileHTML}${claim}<div class="ipc-status"><span>${esc(sub)}</span></div>`;
+  }
+
+  function liarActionsHTML(me) {
+    const ph = S.phase;
+    const hand = S.myHand || [];
+    const myTurn = ph === 'play' && S.turn === S.me;
+    const canCall = ph === 'window' && S.lastPlay && S.lastPlay.by !== S.me;
+    const cards = hand.map((c, i) => `<button class="l-card${liarSel.has(c) ? ' sel' : ''}${c[0] === S.target ? ' match' : ''}" data-card="${c}" style="--i:${i - hand.length / 2}" ${myTurn ? '' : 'disabled'}>${cardHTML(c, '')}</button>`).join('');
+    let ctrl = '';
+    if (myTurn) {
+      ctrl = `<button class="btn gold big l-play" data-act="liarPlay" ${liarSel.size ? '' : 'disabled'}>${liarSel.size ? t('liar.playBtn', { n: liarSel.size, r: rankName(S.target) }) : t('liar.pickCards', { n: S.maxPlay || 3 })}</button>`;
+    } else if (canCall) {
+      ctrl = `<button class="btn l-call" data-act="call">🤥 ${t('liar.callBtn')}</button>`;
+    } else if (ph === 'window') {
+      ctrl = `<span class="hint dots">${t('liar.waitCall')}</span>`;
+    } else if (ph === 'reveal') {
+      ctrl = '';
+    } else {
+      ctrl = `<span class="hint">${t('liar.waitTurn')}</span>`;
+    }
+    return `<div class="l-hand${myTurn ? ' live' : ''}">${cards || `<span class="hint">${t('liar.noCards')}</span>`}</div><div class="l-ctrl">${ctrl}</div>`;
+  }
+
   // ---------------------------------------------------------- winner spotlight
   // Once per showdown: a full-screen moment naming who won and with what.
   const CROWN = '<svg viewBox="0 0 64 44" aria-hidden="true"><defs><linearGradient id="spG" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#fff2b8"/><stop offset=".5" stop-color="#f5c451"/><stop offset="1" stop-color="#a06c17"/></linearGradient></defs><path d="M4 14l14 10L32 4l14 20 14-10-6 26H10z" fill="url(#spG)" stroke="#6b450c" stroke-width="2" stroke-linejoin="round"/><circle cx="32" cy="4" r="4" fill="#e3283a"/><circle cx="4" cy="14" r="3.5" fill="#2f7bff"/><circle cx="60" cy="14" r="3.5" fill="#2f7bff"/></svg>';
@@ -1371,7 +1540,7 @@
   }
 
   function renderActions({ me, opp }) {
-    const bar = S.game === 'indian' ? $('#ipActions') : S.game === 'bomb' ? $('#bombActions') : $('#actionBar');
+    const bar = S.game === 'indian' ? $('#ipActions') : S.game === 'bomb' ? $('#bombActions') : S.game === 'liar' ? $('#liarActions') : $('#actionBar');
     if (!me) return setHTML(bar, spectatorActions());
     const ph = S.phase;
     let html = '';
@@ -1388,6 +1557,8 @@
           ${full ? '' : `<button class="btn ghost" data-act="invite">${t('invite.copy')}</button>`}
           <button class="btn ${me.ready ? 'ghost' : 'gold'} big" data-act="ready" ${opp ? '' : 'disabled'}>${me.ready ? t('act.unready') : t('act.ready')}</button>
         </div>${bots}`;
+    } else if (S.game === 'liar' && ph !== 'gameover') {
+      html = liarActionsHTML(me);
     } else if (S.game === 'bomb' && ph !== 'gameover') {
       html = bombActionsHTML(me);
     } else if (ph === 'bet') {
@@ -1454,7 +1625,7 @@
     const won = championId === S.me;
     const draw = championId === null;
     const title = draw ? t('go.draw') : won ? t('go.win') : t('go.lose');
-    const reasonText = reason === 'bomb' ? t('go.bomb') : reason === 'bust' ? t('go.bust') : t('go.rounds', { n: S.maxRounds });
+    const reasonText = reason === 'liar' ? t('go.liar') : reason === 'bomb' ? t('go.bomb') : reason === 'bust' ? t('go.bust') : t('go.rounds', { n: S.maxRounds });
     const ratingOf = (pid) => (S.final.ratings || []).find((r) => r.pid === pid);
     const rows = standings.map((s, i) => {
       const r = ratingOf(s.id);

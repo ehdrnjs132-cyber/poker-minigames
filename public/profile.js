@@ -2,7 +2,7 @@
 (() => {
   const $ = (s) => document.querySelector(s);
   const { socket, toast, esc, fmt, setHTML } = window.HA;
-  const GAMES = ['memory', 'nut', 'indian', 'bomb'];
+  const GAMES = ['memory', 'nut', 'indian', 'bomb', 'liar'];
   const MEDALS = ['🥇', '🥈', '🥉'];
   let rankGame = 'memory';
   let rankData = null;

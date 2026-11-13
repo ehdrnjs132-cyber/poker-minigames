@@ -135,6 +135,7 @@
     <!-- Indian Poker has its own table (built by app.js) -->
     <div id="ipTable" class="ip-table"></div>
     <div id="bombTable" class="ip-table bomb-table"></div>
+    <div id="liarTable" class="ip-table liar-table"></div>
 
     <div id="spotlight" class="spotlight" role="status" aria-live="polite"></div>
     <div id="overlay" class="overlay"></div>
@@ -188,7 +189,7 @@
           <button data-v="on" data-i18n="bet.onLabel">켜기</button><button data-v="off" data-i18n="bet.offLabel">끄기</button>
         </div>
       </div>
-      <div class="setting" data-only="memory nut indian">
+      <div class="setting" data-only="memory nut indian liar">
         <div class="setting-head"><b data-i18n="setup.turn">한 턴 시간</b><span><em id="turnVal">20</em><span data-i18n="sec">초</span></span></div>
         <div class="seg" data-key="turnSec">
           <button data-v="10">10</button><button data-v="15">15</button><button data-v="20">20</button>
@@ -228,6 +229,7 @@
         <button data-g="nut" data-i18n="game.nut">너트 레이스</button>
         <button data-g="indian" data-i18n="game.indian">인디언 포커</button>
         <button data-g="bomb" data-i18n="game.bomb">고양이 폭탄 파티</button>
+        <button data-g="liar" data-i18n="game.liar">피노키오 거짓말 카드</button>
       </div>
       <div class="rank-list" id="rankList"></div>
       <div class="rank-me" id="rankMe"></div>

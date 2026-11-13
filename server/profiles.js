@@ -5,7 +5,7 @@ const crypto = require('crypto');
 const store = require('./store');
 const { compareScores } = require('./handEval');
 
-const GAMES = ['memory', 'nut', 'indian', 'bomb'];
+const GAMES = ['memory', 'nut', 'indian', 'bomb', 'liar'];
 const PRESETS = Array.from({ length: 12 }, (_, i) => `p${i}`);
 const START_RATING = 1000;
 const MAX_IMAGE_CHARS = 90_000; // ~65 KB image as a data URL

@@ -7,7 +7,7 @@
   const { socket, esc } = window.HA;
   const t = (k, v) => I18N.t(k, v);
   const W = 480;  // portrait world: phones see it at ~full width
-  const H = 1720;
+  const H = 1960;
   const SPEED = 260;      // logical px per second
   const CHARGE_MS = 850;  // how long to stand on a pad
   const SEND_MS = 100;
@@ -36,11 +36,11 @@
       </div>
       <div class="pz-arrow" style="left:226px;top:236px">▼</div>
       <div class="pz-label" style="left:24px;top:268px">${t('plaza.games')}</div>
-      <div class="pz-label" style="left:24px;top:1262px">${t('plaza.rooms')}</div>
+      <div class="pz-label" style="left:24px;top:1497px">${t('plaza.rooms')}</div>
       <span class="pz-suit" style="left:20px;top:150px">♠</span>
       <span class="pz-suit red" style="left:430px;top:140px">♥</span>
-      <span class="pz-suit red" style="left:420px;top:1240px">♦</span>
-      <span class="pz-suit" style="left:20px;top:1670px">♣</span>
+      <span class="pz-suit red" style="left:420px;top:1475px">♦</span>
+      <span class="pz-suit" style="left:20px;top:1905px">♣</span>
       <span class="pz-chips" style="left:60px;top:205px"></span>
       <span class="pz-chips" style="left:380px;top:200px"></span>`;
   }
@@ -51,10 +51,12 @@
     { id: 'nut', x: 24, y: 545, w: 432, h: 200, art: 'nut' },
     { id: 'indian', x: 24, y: 780, w: 432, h: 200, art: 'indian' },
     { id: 'bomb', x: 24, y: 1015, w: 432, h: 200, art: 'bomb' },
+    { id: 'liar', x: 24, y: 1250, w: 432, h: 200, art: 'liar' },
   ];
   const ART = {
     memory: '<span class="pm pm-back"></span><span class="pm pm-face red">A<i>♥</i></span><span class="pm pm-back"></span>',
     nut: '<span class="pm pm-face">K<i>♠</i></span><span class="pm pm-face red">K<i>♥</i></span><span class="pm pm-bolt">⚡</span>',
+    liar: '<span class="pm-bombcat">🤥</span><span class="pm pm-back pm-q">?</span><span class="pm pm-back pm-q">?</span>',
     bomb: '<span class="pm-bombcat">💣</span><span class="pm pm-bolt">🐱</span>',
     indian: '<span class="pm pm-face">7<i>♠</i></span><span class="pm pm-back pm-q">?</span><span class="pm pm-face red">10<i>♥</i></span>',
   };
@@ -64,7 +66,7 @@
   function portalPads() {
     return rooms.slice(0, 6).map((r, i) => ({
       id: `room-${r.code}`, code: r.code, kind: 'portal', room: r,
-      x: 24 + (i % 2) * 222, y: 1304 + Math.floor(i / 2) * 115, w: 210, h: 100,
+      x: 24 + (i % 2) * 222, y: 1539 + Math.floor(i / 2) * 115, w: 210, h: 100,
     }));
   }
 
@@ -86,7 +88,7 @@
       const sub = r.joinable ? (r.playing ? t('rooms.lateJoin') : t('join.btn')) : t('rooms.watch');
       return `<div class="pad portal${r.joinable ? '' : ' watch'}" data-pad="${p.id}" style="${style}"><div class="pad-in"><span class="portal-ring"></span><b>${esc(t('plaza.portal', { name: r.host }))}</b><span class="pad-sub">${esc(t(`game.${r.gameId}`))} · ${r.players}/${r.max} · ${sub}</span></div><i class="pad-fill"></i></div>`;
     }).join('');
-    const empty = rooms.length ? '' : `<div class="plaza-empty" style="left:24px;top:1310px;width:432px">${t('plaza.noRooms')}</div>`;
+    const empty = rooms.length ? '' : `<div class="plaza-empty" style="left:24px;top:1545px;width:432px">${t('plaza.noRooms')}</div>`;
     padsBox.innerHTML = html + empty;
     for (const p of pads) p.el = padsBox.querySelector(`[data-pad="${p.id}"]`);
   }

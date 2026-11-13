@@ -1123,7 +1123,7 @@ body.chat-open .chat-fab { opacity: 0; pointer-events: none; transform: scale(.8
 #lobby.active ~ #chatFab { display: none; }
 
 #lobby .plaza { flex: 1; min-height: 0; margin: 0; border: 0; border-radius: 0; box-shadow: inset 0 10px 20px rgba(0, 0, 0, .35); height: auto !important; }
-.plaza-world { width: 480px; height: 1720px; }
+.plaza-world { width: 480px; height: 1960px; }
 .plaza-floor::after { display: none; }
 .plaza-floor {
   background:
@@ -1526,3 +1526,79 @@ body.chat-open .roam-ui, body.dueling .roam-ui { display: none !important; }
 .db-bars { display: flex; align-items: center; gap: 6px; }
 .db-bars .ds-bar { width: 90px; height: 10px; }
 .db-bars span { font-weight: 900; color: var(--gold); font-size: .8rem; }
+
+/* ================= Pinocchio Liar's Cards ================= */
+#room:not(.game-liar) #liarTable { display: none; }
+#room.game-liar .stage { display: none; }
+.liar-rail { background: radial-gradient(ellipse at 50% 30%, #c98a4b, #8a5524 60%, #5a3412); }
+.liar-felt { background: repeating-linear-gradient(90deg, #b9814a 0 46px, #ad7640 46px 48px), linear-gradient(180deg, #c48d55, #9c6534) !important;
+  box-shadow: inset 0 0 0 3px rgba(255, 230, 180, .5), inset 0 0 70px rgba(60, 25, 0, .55) !important; }
+.liar-felt .ip-logo { color: rgba(80, 40, 10, .22); }
+.liar-center { gap: 8px; }
+.liar-center .ipc-status span { color: #fff3dc; text-shadow: 0 1px 3px rgba(0, 0, 0, .6); }
+.l-target { display: grid; justify-items: center; padding: 6px 18px 4px; border-radius: 14px; background: #fff8e8; border: 3px solid #6b3f17; box-shadow: 0 6px 0 #6b3f17, 0 10px 18px rgba(0, 0, 0, .35); color: #4a2a0c; }
+.l-target span { font-size: .7rem; font-weight: 900; letter-spacing: .06em; }
+.l-target b { font-family: var(--num); font-size: clamp(2.2rem, 5vw, 3.4rem); line-height: 1; color: #c81d2e; }
+.l-target small { font-size: .66rem; font-weight: 800; opacity: .7; }
+.l-pile { position: relative; width: 70px; height: 54px; }
+.l-pile i { position: absolute; left: 14px; top: 6px; width: 38px; height: 52px; border-radius: 6px; border: 2px solid #fff;
+  background: repeating-linear-gradient(45deg, #1d3c8f 0 4px, #15306f 4px 8px); transform: rotate(calc(var(--k) * 9deg - 40deg)) translate(calc(var(--k) * 1px), calc(var(--k) * -1px)); box-shadow: 0 2px 4px rgba(0, 0, 0, .4); }
+.l-pile b { position: absolute; right: -10px; bottom: -6px; min-width: 26px; padding: 2px 6px; border-radius: 999px; background: #c81d2e; color: #fff; font-weight: 900; font-size: .8rem; text-align: center; }
+.l-claim { padding: 6px 14px; border-radius: 999px; background: rgba(0, 0, 0, .45); color: #fff; font-weight: 800; animation: ttIn .3s cubic-bezier(.2, 1.4, .4, 1); }
+.l-claim b { color: var(--gold-hi); }
+.l-verdict { font-family: var(--display); font-size: clamp(1.1rem, 2.6vw, 1.7rem); padding: 6px 16px; border-radius: 14px; color: #fff; animation: tPop 3.2s both; text-align: center; }
+.l-verdict.lie { background: rgba(200, 29, 46, .9); }
+.l-verdict.true { background: rgba(20, 140, 90, .9); }
+.l-revealed { display: flex; gap: 6px; }
+.l-revealed .card { --w: 46px; width: 46px; animation: dealIn .45s cubic-bezier(.2, 1.2, .4, 1) both; }
+.l-revealed .card.bad .front { box-shadow: 0 0 0 3px #ff4d6d, 0 0 16px rgba(255, 77, 109, .9); }
+.l-revealed .card.ok .front { box-shadow: 0 0 0 3px #43d17a, 0 0 14px rgba(67, 209, 122, .8); }
+.liar-center.flash-lie { animation: lFlash .6s; } .liar-center.flash-true { animation: lFlashT .6s; }
+@keyframes lFlash { 30% { filter: drop-shadow(0 0 30px rgba(255, 60, 80, .9)); transform: translate(-50%, -50%) scale(1.06); } }
+@keyframes lFlashT { 30% { filter: drop-shadow(0 0 30px rgba(60, 220, 140, .9)); transform: translate(-50%, -50%) scale(1.06); } }
+
+/* seats: card fan + nose */
+.lseat .l-fan { position: relative; height: 40px; width: 90px; display: flex; justify-content: center; align-items: flex-end; margin-bottom: -6px; }
+.lseat .l-fan i { position: absolute; bottom: 0; left: 50%; width: 20px; height: 30px; margin-left: -10px; border-radius: 4px; border: 1.5px solid #fff;
+  background: repeating-linear-gradient(45deg, #1d3c8f 0 3px, #15306f 3px 6px); transform-origin: 50% 120%; transform: rotate(calc(var(--k) * 9deg)); box-shadow: 0 1px 3px rgba(0, 0, 0, .4); }
+.lseat .l-fan b { position: absolute; right: 0; top: 0; padding: 0 6px; border-radius: 999px; background: #fff8e8; color: #4a2a0c; font-size: .72rem; font-weight: 900; z-index: 2; }
+.lseat .is-avatar { position: relative; z-index: 1; }
+.nose { position: absolute; left: 62%; top: 52%; z-index: 3; width: var(--len); height: 12px; margin-top: -6px; transform-origin: 0 50%; transition: width .5s cubic-bezier(.2, 1.6, .4, 1); pointer-events: none; }
+.nose i { position: absolute; inset: 0; border-radius: 2px 999px 999px 2px; background: linear-gradient(180deg, #e8a868, #b0692c); box-shadow: 0 2px 0 #7a4316, inset 0 2px 0 rgba(255, 255, 255, .35); }
+.nose i::after { content: ''; position: absolute; right: -3px; top: 1px; width: 10px; height: 10px; border-radius: 50%; background: radial-gradient(circle at 40% 35%, #f3b98a, #c0733a); }
+.lseat.face-left .nose { left: auto; right: 62%; transform-origin: 100% 50%; }
+.lseat.face-left .nose i { transform: scaleX(-1); }
+.nose.w1 { animation: noseW 1.2s ease-in-out; } .nose.w2 { animation: noseW 1.2s ease-in-out; --amp: 1.25; }
+.nose.w3 { animation: noseW .9s ease-in-out 2; --amp: 1.45; } .nose.w4 { animation: noseW .7s ease-in-out 3; --amp: 1.7; }
+@keyframes noseW { 0%, 100% { transform: scaleX(1) rotate(0); } 30% { transform: scaleX(var(--amp, 1.12)) rotate(-4deg); } 60% { transform: scaleX(.95) rotate(3deg); } }
+.lseat.caught .nose { animation: noseGrow 1.4s cubic-bezier(.2, 1.6, .4, 1); }
+@keyframes noseGrow { 0% { transform: scaleX(1); } 35% { transform: scaleX(3.2); } 60% { transform: scaleX(2.2) rotate(-6deg); } 100% { transform: scaleX(1); } }
+.lseat.caught .is-avatar { animation: tHit .5s 2; }
+
+/* my hand + controls */
+.liar-bar { flex-direction: column; gap: 8px; }
+.l-hand { display: flex; justify-content: center; align-items: flex-end; min-height: 92px; padding: 6px 30px 0; flex-wrap: nowrap; max-width: 100%; overflow-x: auto; }
+.l-card { border: 0; background: none; padding: 0; margin: 0 -10px; transition: transform .15s; transform: rotate(calc(var(--i) * 3deg)) translateY(calc(var(--i) * var(--i) * .6px)); cursor: pointer; }
+.l-card .card { --w: 56px; width: 56px; }
+.l-card:disabled { cursor: default; filter: brightness(.85); }
+.l-hand.live .l-card:hover { transform: translateY(-10px); }
+.l-card.sel { transform: translateY(-22px) !important; }
+.l-card.sel .front { box-shadow: 0 0 0 3px var(--gold), 0 0 18px rgba(245, 196, 81, .9); }
+.l-hand.live .l-card.match .front { box-shadow: inset 0 0 0 2px rgba(20, 140, 90, .7); }
+.l-ctrl { display: flex; justify-content: center; min-height: 54px; align-items: center; }
+.l-call { font-size: 1.3rem; padding: 12px 30px; color: #fff; background: radial-gradient(circle at 40% 30%, #ff8a99, #c81d2e 70%); box-shadow: 0 5px 0 #7a0612, 0 0 26px rgba(255, 60, 80, .7); animation: ipPulse 1s infinite; }
+.l-play { min-width: 230px; }
+.tut-nose { position: relative; font-size: 3.4rem; }
+.tut-nose i { position: absolute; left: 70%; top: 52%; width: 30px; height: 12px; border-radius: 2px 999px 999px 2px; background: linear-gradient(180deg, #e8a868, #b0692c); transform-origin: 0 50%; animation: noseGrow 2s infinite; }
+.l-call-demo { padding: 10px 22px; border-radius: 999px; background: #c81d2e; color: #fff; font-weight: 900; font-size: 1.3rem; animation: ipPulse 1s infinite; }
+.pad[data-pad="liar"] { background: radial-gradient(ellipse at 50% 30%, #d99a5b, #8a5524 70%); }
+@media (max-aspect-ratio: 4/5) {
+  .l-card .card { --w: 44px; width: 44px; }
+  .l-card { margin: 0 -9px; }
+  .l-hand { min-height: 74px; padding: 4px 16px 0; }
+  .lseat .l-fan { height: 30px; width: 70px; }
+  .l-target b { font-size: 2rem; }
+}
+.liar-table .ip-oval { width: min(100%, 1100px, calc((100dvh - 360px) * 2)); margin-top: 48px; }
+.l-hand { overflow: visible; flex-wrap: wrap; row-gap: 4px; min-height: 84px; padding-top: 16px; }
+@media (max-aspect-ratio: 4/5) { .liar-table .ip-oval { width: min(100%, calc((100dvh - 360px) * .667)); } }
