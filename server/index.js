@@ -26,6 +26,24 @@ const MAX_SPECTATORS = 20;
 const app = express();
 app.use(express.static(path.join(__dirname, '..', 'public')));
 app.get('/healthz', (_req, res) => res.send('ok'));
+// Public client config (Google sign-in shows up only when a client id is set).
+const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID || '';
+app.get('/config.json', (_req, res) => res.json({ googleClientId: GOOGLE_CLIENT_ID || null }));
+
+// Check a Google ID token with Google and return its account id (sub).
+async function verifyGoogle(credential) {
+  if (!GOOGLE_CLIENT_ID || typeof credential !== 'string' || credential.length > 4096) return null;
+  try {
+    const r = await fetch(`https://oauth2.googleapis.com/tokeninfo?id_token=${encodeURIComponent(credential)}`);
+    if (!r.ok) return null;
+    const info = await r.json();
+    const issOk = info.iss === 'accounts.google.com' || info.iss === 'https://accounts.google.com';
+    if (info.aud !== GOOGLE_CLIENT_ID || !issOk || Number(info.exp) * 1000 < Date.now() || !info.sub) return null;
+    return { sub: String(info.sub), gname: info.given_name || info.name || '' };
+  } catch {
+    return null;
+  }
+}
 
 // Uploaded profile photos (stored as data URLs) served as real images.
 app.get('/avatar/:id', (req, res) => {
@@ -286,6 +304,16 @@ io.on('connection', (socket) => {
     }
     announceOnline();
     reply(ack, { ok: true, user: res.user });
+  });
+
+  socket.on('google:login', async ({ credential } = {}, ack) => {
+    const g = await verifyGoogle(credential);
+    if (!g) return reply(ack, { ok: false, code: 'me.googleFail' });
+    const res = profiles.googleLogin({ ...g, currentUid: uid });
+    uid = res.uid;
+    if (online.get(socket.id)) online.get(socket.id).uid = uid;
+    announceOnline();
+    reply(ack, { ok: true, ...res });
   });
 
   socket.on('ranking', (game, ack) => reply(ack, { ok: true, ...profiles.leaderboard(String(game), uid) }));

@@ -20,13 +20,53 @@ function cleanName(name) {
 }
 
 function publicUser(u) {
-  return u && { id: u.id, name: u.name, avatar: u.avatar || null, avatarV: u.avatarV || 0 };
+  return u && { id: u.id, name: u.name, avatar: u.avatar || null, avatarV: u.avatarV || 0, google: !!u.google };
+}
+
+// A profile can be signed in on several devices (each gets its own token).
+const MAX_TOKENS = 10;
+function tokenOk(u, token) {
+  if (!u || !token) return false;
+  const h = hash(token);
+  return u.tokenHash === h || (u.tokens || []).includes(h);
+}
+function addToken(u) {
+  const tok = newToken();
+  u.tokens = [hash(tok), ...(u.tokens || [])].slice(0, MAX_TOKENS);
+  return tok;
+}
+
+// Google sign-in. `sub` is Google's stable account id (we keep nothing else
+// but an optional display name). First sign-in links the current browser
+// profile; later sign-ins (any device) open that same profile.
+function googleLogin({ sub, gname, currentUid }) {
+  const linked = store.get(`google:${sub}`);
+  if (linked && getUser(linked)) {
+    const u = getUser(linked);
+    const token = addToken(u);
+    u.lastSeen = Date.now();
+    store.set(`user:${u.id}`, u);
+    return { user: publicUser(u), uid: u.id, token, switched: linked !== currentUid };
+  }
+  let u = currentUid && getUser(currentUid);
+  if (u && u.google && u.google.sub !== sub) u = null; // already tied to another Google account
+  let token = null;
+  if (!u) {
+    const id = newId();
+    u = { id, name: cleanName(gname) || 'Player', avatar: `p${crypto.randomInt(PRESETS.length)}`, avatarV: 0, createdAt: Date.now() };
+    token = addToken(u);
+  }
+  u.google = { sub, at: Date.now() };
+  if ((!u.name || u.name === 'Player') && cleanName(gname)) u.name = cleanName(gname);
+  store.set(`user:${u.id}`, u);
+  store.set(`google:${sub}`, u.id);
+  return { user: publicUser(u), uid: u.id, token, switched: u.id !== currentUid, linkedNow: true };
 }
 
 // Find or create the profile for this browser.
 function hello({ uid, token, name, noCreate } = {}) {
   let u = uid && store.get(`user:${uid}`);
-  if (!u || u.tokenHash !== hash(token)) {
+  if (!u || !tokenOk(u, token)) {
     if (noCreate) return { invalid: true }; // transfer-code check: never mint a new profile
 
     const id = newId();
@@ -147,4 +187,4 @@ function myStats(id) {
   return { user: publicUser(u), games };
 }
 
-module.exports = { hello, getUser, update, image, recordRound, recordGame, recordAbandon, leaderboard, myStats, publicUser, PRESETS, GAMES };
+module.exports = { hello, getUser, update, image, recordRound, recordGame, recordAbandon, leaderboard, myStats, publicUser, PRESETS, GAMES, googleLogin };

@@ -59,6 +59,10 @@
         <span data-i18n="nick.label">닉네임</span>
         <input id="nameInput" maxlength="12" autocomplete="nickname" placeholder="닉네임을 입력하세요" data-i18n-ph="nick.ph" />
       </label>
+      <div class="set-row google-row" id="googleRow" hidden>
+        <b data-i18n="set.google">구글 계정</b>
+        <div class="g-box"><div id="gStatus"></div><div id="gBtn"></div></div>
+      </div>
       <div class="set-row"><b data-i18n="set.lang">언어</b><button class="lang-toggle btn ghost">EN</button></div>
       <div class="set-row"><b data-i18n="set.sound">효과음</b><button id="lobbyMute" class="btn ghost"></button></div>
       <div class="set-row"><b data-i18n="set.profile">프로필 사진 · 기록</b><button id="setMe" class="btn ghost" data-i18n="nav.me">마이페이지</button></div>
@@ -304,5 +308,6 @@
   <script src="taunts.js"></script>
   <script src="roam.js"></script>
   <script src="duel.js"></script>
+  <script src="google.js"></script>
 </body>
 </html>

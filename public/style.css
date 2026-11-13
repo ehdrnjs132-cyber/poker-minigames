@@ -1602,3 +1602,10 @@ body.chat-open .roam-ui, body.dueling .roam-ui { display: none !important; }
 .liar-table .ip-oval { width: min(100%, 1100px, calc((100dvh - 360px) * 2)); margin-top: 48px; }
 .l-hand { overflow: visible; flex-wrap: wrap; row-gap: 4px; min-height: 84px; padding-top: 16px; }
 @media (max-aspect-ratio: 4/5) { .liar-table .ip-oval { width: min(100%, calc((100dvh - 360px) * .667)); } }
+
+/* Google sign-in row */
+.google-row { align-items: flex-start; }
+.g-box { display: grid; justify-items: end; gap: 8px; max-width: 70%; }
+.g-hint { font-size: .78rem; color: var(--muted); text-align: right; display: block; }
+.g-on { color: #43d17a; font-weight: 800; margin-right: 8px; }
+#gStatus { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; justify-content: flex-end; }
