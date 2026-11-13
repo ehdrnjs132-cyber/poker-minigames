@@ -38,7 +38,7 @@
         <path d="M100 20 L164 42 V84 C164 117 136 138 100 150 C64 138 36 117 36 84 V42 Z" fill="#0a1638" />
         <path transform="translate(70 26) scale(.6)" d="M50 5 C35 30 5 42 5 65 C5 80 18 90 31 90 C40 90 46 85 48 80 C47 88 43 95 36 100 H64 C57 95 53 88 52 80 C54 85 60 90 69 90 C82 90 95 80 95 65 C95 42 65 30 50 5Z" fill="url(#gGold)" />
         <rect x="14" y="96" width="172" height="34" rx="6" fill="url(#gRed)" stroke="url(#gGold)" stroke-width="3" />
-        <text x="100" y="120" text-anchor="middle" font-family="Oswald, sans-serif" font-weight="700" font-size="20" letter-spacing="3" fill="#fff4cf">HOLDEM ARCADE</text>
+        <text x="100" y="120" text-anchor="middle" font-family="Oswald, sans-serif" font-weight="700" font-size="19" letter-spacing="2" textLength="148" lengthAdjust="spacingAndGlyphs" fill="#fff4cf">HOLDEM ARCADE</text>
       </svg>
       <p class="tagline" data-i18n="tagline">친구들과 함께하는 포커 룰 미니게임</p>
     </header>
@@ -71,18 +71,6 @@
           </div>
           <span class="gc-cta" data-i18n="cta.create">방 만들기</span>
         </button>
-        <button class="game-card" data-game="shuffle">
-          <div class="gc-art shuffle-art">
-            <span class="mini-card back"></span><span class="mini-card back"></span><span class="mini-card back"></span>
-            <svg class="swap-arrow" viewBox="0 0 120 40" aria-hidden="true"><path d="M18 30 Q60 -6 102 30" fill="none" stroke="#ffe08a" stroke-width="4" stroke-linecap="round" stroke-dasharray="2 9"/><path d="M94 22 l9 9 -12 2" fill="none" stroke="#ffe08a" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/></svg>
-          </div>
-          <div class="gc-body">
-            <b><span data-i18n="game.shuffle">셔플 메모리</span> <span class="gc-new">NEW</span></b>
-            <p data-i18n="game.shuffle.desc"></p>
-            <span class="gc-meta" data-i18n="game.shuffle.meta"></span>
-          </div>
-          <span class="gc-cta" data-i18n="cta.create">방 만들기</span>
-        </button>
         <button class="game-card" data-game="nut">
           <div class="gc-art nut-art">
             <span class="mini-card mface">K<i>♠</i></span><span class="mini-card mface red">K<i>♥</i></span><span class="mini-card mface">9<i>♣</i></span>
@@ -95,20 +83,10 @@
           </div>
           <span class="gc-cta" data-i18n="cta.create">방 만들기</span>
         </button>
-        <button class="game-card" data-game="indian">
-          <div class="gc-art indian-art">
-            <span class="forehead f1"><span class="mini-card mface">7<i>♠</i></span></span>
-            <span class="forehead f2"><span class="mini-card back">?</span></span>
-            <span class="forehead f3"><span class="mini-card mface red">10<i>♥</i></span></span>
-          </div>
-          <div class="gc-body">
-            <b><span data-i18n="game.indian">인디언 포커</span> <span class="gc-new">NEW</span></b>
-            <p data-i18n="game.indian.desc"></p>
-            <span class="gc-meta" data-i18n="game.indian.meta"></span>
-          </div>
-          <span class="gc-cta" data-i18n="cta.create">방 만들기</span>
-        </button>
       </div>
+
+      <h2 class="section-title"><span data-i18n="online.title">접속 중</span> <small id="onlineCount"></small></h2>
+      <div id="onlineList" class="online-list"></div>
 
       <h2 class="section-title"><span data-i18n="rooms.title">열린 방</span> <small id="roomsCount"></small></h2>
       <div id="roomList" class="room-list"></div>
@@ -162,7 +140,6 @@
           </div>
           <div class="board" id="board"></div>
           <div class="grid" id="grid"></div>
-          <div class="indian-center" id="indianCenter"></div>
           <div class="banner" id="banner"></div>
         </div>
       </div>
@@ -208,7 +185,7 @@
           <button data-v="2">2</button><button data-v="3">3</button><button data-v="4">4</button><button data-v="5">5</button><button data-v="6">6</button>
         </div>
       </div>
-      <div class="setting" data-only="memory shuffle">
+      <div class="setting" data-only="memory">
         <div class="setting-head"><b data-i18n="setup.memorize">기억 시간</b><span><em id="memVal">30</em><span data-i18n="sec">초</span></span></div>
         <div class="seg" data-key="memorizeSec">
           <button data-v="10">10</button><button data-v="15">15</button><button data-v="20">20</button>
@@ -216,39 +193,26 @@
         </div>
         <input type="range" min="5" max="90" step="1" data-key="memorizeSec" data-i18n-label="setup.memorize" />
       </div>
-      <div class="setting" data-only="memory shuffle">
+      <div class="setting" data-only="memory">
         <div class="setting-head"><b data-i18n="setup.betting">베팅 라운드</b><span data-i18n="setup.bettingHint">카드를 고른 뒤 자신감으로 베팅</span></div>
         <div class="seg seg-2" data-key="betting">
           <button data-v="on" data-i18n="bet.onLabel">켜기</button><button data-v="off" data-i18n="bet.offLabel">끄기</button>
         </div>
       </div>
-      <div class="setting" data-only="indian memory shuffle">
+      <div class="setting" data-only="memory">
         <div class="setting-head"><b data-i18n="setup.turn">한 턴 시간</b><span><em id="turnVal">20</em><span data-i18n="sec">초</span></span></div>
         <div class="seg" data-key="turnSec">
           <button data-v="10">10</button><button data-v="15">15</button><button data-v="20">20</button>
           <button data-v="30">30</button><button data-v="45">45</button><button data-v="60">60</button>
         </div>
       </div>
-      <div class="setting" data-only="memory shuffle nut">
+      <div class="setting" data-only="memory nut">
         <div class="setting-head"><b data-i18n="setup.pick">선택 시간</b><span><em id="pickVal">20</em><span data-i18n="sec">초</span></span></div>
         <div class="seg" data-key="pickSec">
           <button data-v="10">10</button><button data-v="15">15</button><button data-v="20">20</button>
           <button data-v="30">30</button><button data-v="45">45</button><button data-v="60">60</button>
         </div>
         <input type="range" min="5" max="60" step="1" data-key="pickSec" data-i18n-label="setup.pick" />
-      </div>
-      <div class="setting" data-only="shuffle">
-        <div class="setting-head"><b data-i18n="setup.swaps">섞는 횟수</b><span data-i18n="setup.swapsHint">많을수록 어려워요</span></div>
-        <div class="seg seg-5" data-key="swaps">
-          <button data-v="3" data-i18n-times="3"></button><button data-v="5" data-i18n-times="5"></button><button data-v="8" data-i18n-times="8"></button>
-          <button data-v="12" data-i18n-times="12"></button><button data-v="16" data-i18n-times="16"></button>
-        </div>
-      </div>
-      <div class="setting" data-only="shuffle">
-        <div class="setting-head"><b data-i18n="setup.speed">섞는 속도</b></div>
-        <div class="seg seg-3" data-key="speed">
-          <button data-v="slow" data-i18n="speed.slow"></button><button data-v="normal" data-i18n="speed.normal"></button><button data-v="fast" data-i18n="speed.fast"></button>
-        </div>
       </div>
       <div class="result-actions">
         <button class="btn ghost" id="setupCancel" data-i18n="cancel">취소</button>
@@ -266,9 +230,7 @@
       </header>
       <div class="tabs" id="rankTabs">
         <button data-g="memory" data-i18n="game.memory">기억 포커</button>
-        <button data-g="shuffle" data-i18n="game.shuffle">셔플 메모리</button>
         <button data-g="nut" data-i18n="game.nut">너트 레이스</button>
-        <button data-g="indian" data-i18n="game.indian">인디언 포커</button>
       </div>
       <div class="rank-list" id="rankList"></div>
       <div class="rank-me" id="rankMe"></div>

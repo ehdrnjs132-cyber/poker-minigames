@@ -193,7 +193,7 @@ input { font: inherit; }
 }
 .felt-logo {
   position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); pointer-events: none;
-  font-family: var(--num); font-weight: 700; font-size: clamp(2rem, 7vw, 5rem); letter-spacing: .2em; white-space: nowrap;
+  font-family: var(--num); font-weight: 700; font-size: clamp(1.6rem, 4.6vw, 3.6rem); letter-spacing: .14em; white-space: nowrap; max-width: 94%; overflow: hidden;
   color: rgba(0, 0, 0, .08); text-shadow: 0 1px 0 rgba(255, 255, 255, .05);
 }
 
@@ -559,6 +559,25 @@ input { font: inherit; }
 }
 
 /* ---------- room list & invite ---------- */
+/* ---- online now ---- */
+.online-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)); gap: 8px; margin-bottom: 6px; }
+.online-empty { grid-column: 1 / -1; padding: 10px; text-align: center; color: var(--muted); font-size: .85rem; }
+.person {
+  display: flex; align-items: center; gap: 10px; padding: 8px 10px; border-radius: 14px; min-width: 0;
+  background: rgba(3, 8, 23, .55); border: 1px solid rgba(127, 176, 255, .18); animation: fadeIn .3s both;
+}
+.person.me { border-color: rgba(245, 196, 81, .45); }
+.person .avatar { width: 36px; height: 36px; flex: none; border-radius: 50%; display: grid; place-items: center; overflow: hidden; font-weight: 700; color: #fff; }
+.person .avatar img, .person .avatar svg { width: 100%; height: 100%; object-fit: cover; }
+.p-info { display: grid; min-width: 0; flex: 1; }
+.p-info b { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-size: .92rem; }
+.p-info b em { font-style: normal; font-size: .7rem; color: var(--gold, #f5c451); margin-left: 5px; }
+.p-info span { display: flex; align-items: center; gap: 5px; font-size: .76rem; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.p-info .dot { width: 7px; height: 7px; border-radius: 50%; background: #43d17a; box-shadow: 0 0 6px #43d17a; flex: none; }
+.person.waiting .dot { background: #f5c451; box-shadow: 0 0 6px #f5c451; }
+.person.busy .dot { background: #ff5a6a; box-shadow: 0 0 6px #ff5a6a; }
+.btn.small { padding: 6px 10px; font-size: .78rem; flex: none; }
+
 .room-list { display: grid; gap: 8px; }
 .room-empty { padding: 18px; text-align: center; color: var(--muted); border: 1px dashed rgba(127, 176, 255, .25); border-radius: 14px; font-size: .9rem; }
 .room-row {

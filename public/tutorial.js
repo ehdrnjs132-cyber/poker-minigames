@@ -1,4 +1,4 @@
-﻿// Optional step-by-step "how to play" (Korean / English), with small animated demos.
+// Optional step-by-step "how to play" (Korean / English), with small animated demos.
 const Tutorial = (() => {
   const $ = (s) => document.querySelector(s);
   const el = $('#tutorial');
@@ -46,7 +46,7 @@ const Tutorial = (() => {
 
   const STEPS = [
     {
-      games: ['memory', 'shuffle'],
+      games: ['memory'],
       title: { ko: "카드 위치를 외우세요", en: "Memorize the card positions" },
       text: { ko: "테이블에 카드 16장이 앞면으로 공개됩니다. 제한 시간(방 설정, 기본 30초) 동안 <b>어떤 카드가 어느 자리에 있는지</b> 외우세요. 둘 다 \"다 외웠어요\"를 누르면 바로 넘어갑니다.", en: "All 16 cards are dealt face up. During the time limit (set per room, 30s by default), remember <b>which card sits in which spot</b>. If both players press \"I've got it\", the game moves on right away." },
       html: () => `<div class="tut-felt"><span class="tut-timer">30</span>${gridHTML(false)}</div>`,
@@ -58,7 +58,7 @@ const Tutorial = (() => {
       },
     },
     {
-      games: ['memory', 'shuffle'],
+      games: ['memory'],
       title: { ko: "카드가 뒤집힙니다", en: "The cards flip over" },
       text: { ko: "시간이 끝나면 모든 카드가 <b>뒷면</b>으로 뒤집힙니다. 이제부터는 기억만이 무기예요!", en: "When time runs out, every card flips <b>face down</b>. From here on, memory is your only weapon!" },
       html: () => `<div class="tut-felt">${gridHTML(false)}</div>`,
@@ -71,39 +71,7 @@ const Tutorial = (() => {
       },
     },
     {
-      games: ['shuffle'],
-      title: { ko: "카드가 섞여요! (셔플 메모리)", en: "The cards shuffle! (Shuffle Memory)" },
-      text: { ko: "뒤집힌 카드들이 <b>두 장씩 자리를 바꾸며</b> 섞입니다. 노란 테두리 카드(K♥)처럼 <b>좋은 카드가 어디로 가는지 눈으로 따라가세요.</b> 섞는 횟수와 속도는 방을 만들 때 정할 수 있어요.", en: "The face-down cards <b>swap places two at a time</b>. Like the card with the yellow border (K♥), <b>keep your eyes on where the good cards go.</b> You choose how many shuffles and how fast when you create the room." },
-      html: () => `<div class="tut-felt">${gridHTML(true, (i) => (i === 1 ? 'track' : ''))}</div>`,
-      play() {
-        const grid = stage.querySelector('.tut-grid');
-        const swaps = [[1, 6], [3, 4], [6, 2], [0, 5]];
-        let k = 0;
-        const step = () => {
-          if (k >= swaps.length) return;
-          const [a, b] = swaps[k++];
-          const cards = [...grid.children];
-          const A = cards[a], B = cards[b];
-          const ra = A.getBoundingClientRect(), rb = B.getBoundingClientRect();
-          const dx = rb.left - ra.left, dy = rb.top - ra.top;
-          for (const [el, x, y] of [[A, dx, dy], [B, -dx, -dy]]) {
-            el.style.transition = 'transform .55s cubic-bezier(.55,0,.25,1)';
-            el.style.transform = `translate(${x}px, ${y}px)`;
-            el.style.zIndex = '2';
-          }
-          window.SFX && SFX.swoosh();
-          later(560, () => {
-            for (const el of [A, B]) { el.style.transition = 'none'; el.style.transform = ''; el.style.zIndex = ''; }
-            const tmp = document.createElement('div');
-            grid.insertBefore(tmp, A); grid.insertBefore(A, B); grid.insertBefore(B, tmp); tmp.remove();
-            later(260, step);
-          });
-        };
-        later(700, step);
-      },
-    },
-    {
-      games: ['memory', 'shuffle'],
+      games: ['memory'],
       title: { ko: "공유 카드 5장", en: "5 community cards" },
       text: { ko: "두 사람이 <b>함께 쓰는 공유 카드 5장</b>이 깔립니다. 이 5장과 잘 어울릴 카드가 어디 있었는지 떠올려 보세요.", en: "<b>5 community cards</b> shared by both players are dealt. Think back to where the cards that go well with them were." },
       html: () => `<div class="tut-felt">${boardHTML(() => 'deal-in')}${gridHTML(true)}</div>`,
@@ -113,7 +81,7 @@ const Tutorial = (() => {
       },
     },
     {
-      games: ['memory', 'shuffle'],
+      games: ['memory'],
       title: { ko: "위치를 보고 2장 선택", en: "Pick 2 cards by position" },
       text: { ko: "뒤집힌 카드 중 <b>2장을 눌러 고르고 \"선택 확정\"</b>을 누르세요. 상대가 뭘 골랐는지는 쇼다운 전까지 보이지 않아요. 상대와 <b>같은 카드를 골라도 괜찮고</b>, 시간 안에 못 고르면 랜덤으로 정해집니다.", en: "Tap <b>2 face-down cards, then press \"Lock in\"</b>. You can't see your opponent's picks until the showdown. <b>Picking the same card as your opponent is fine</b>, and if time runs out your picks are random." },
       html: () => `<div class="tut-felt">${boardHTML()}${gridHTML(true)}<div class="tut-pointer"></div></div>`,
@@ -136,7 +104,7 @@ const Tutorial = (() => {
       },
     },
     {
-      games: ['memory', 'shuffle'],
+      games: ['memory'],
       title: { ko: "쇼다운!", en: "Showdown!" },
       text: { ko: "고른 카드가 공개됩니다. <b>내 2장 + 공유 5장 = 7장 중 가장 좋은 5장</b>으로 승부해요. 이 예시는 K♥·9♣를 골라 <b>K 풀하우스</b>! 이긴 사람이 팟(앤티 합계)을 가져가고, 족보가 같으면 나눠 가집니다.", en: "The picked cards are revealed. You play the <b>best 5 of 7: your 2 + the 5 community cards</b>. In this example, picking K♥ and 9♣ makes <b>Kings full of 9s</b>! The winner takes the pot (both antes); ties split it." },
       html: () => `<div class="tut-felt">
@@ -207,71 +175,7 @@ const Tutorial = (() => {
       },
     },
     {
-      games: ['indian'],
-      title: { ko: '내 카드만 안 보여요', en: "You can't see your own card" },
-      text: {
-        ko: '모두 카드 1장을 이마에 붙여요. <b>다른 사람 카드는 다 보이지만 내 카드는 "?"</b>로만 보입니다. 카드는 <b>1~10 두 벌(20장)</b>이고, 숫자가 가장 높은 사람이 이겨요.',
-        en: 'Everyone wears one card on their forehead. <b>You see everyone else\'s card, but yours shows as "?"</b>. The deck is <b>two sets of 1–10 (20 cards)</b>, and the highest number wins.',
-      },
-      html: () => `<div class="tut-felt tut-ip">
-          <div class="tut-ip-seat">${card('7s')}<span>Leo</span></div>
-          <div class="tut-ip-seat">${card('Th')}<span>Mia</span></div>
-          <div class="tut-ip-seat me">${card(null, { down: true, cls: 'mine-hidden' }).replace('<span class="letter"></span>', '<span class="letter">?</span>')}<span>${t('me')}</span></div>
-        </div>`,
-      play() {
-        stageCards('.tut-ip-seat .card').forEach((c, i) => { c.classList.add('deal-in'); c.style.setProperty('--dd', `${i * 160}ms`); });
-        window.SFX && SFX.deal();
-      },
-    },
-    {
-      games: ['indian'],
-      title: { ko: '베팅으로 추리하기', en: 'Read the bets' },
-      text: {
-        ko: '내 차례에 <b>다이 / 체크 / 콜 / 레이즈(+50, +100) / 올인</b> 중 하나를 골라요. Mia의 10이 보이면 나는 이기기 어렵겠죠? 반대로 <b>남들이 자신 있게 레이즈하면, 내 카드가 낮다는 뜻</b>일 수 있어요. 블러핑도 전략!',
-        en: 'On your turn choose <b>Fold / Check / Call / Raise (+50, +100) / All in</b>. If you see Mia\'s 10, you\'re unlikely to win. And if <b>others raise confidently, your card is probably low</b>. Bluffing is part of the game!',
-      },
-      html: () => `<div class="tut-felt tut-ip">
-          <div class="tut-ip-seat">${card('7s')}<span>Leo · ${t('ip.check')}</span></div>
-          <div class="tut-ip-seat">${card('Th')}<span>Mia · <b class="tut-raise">${t('ip.raiseTo', { n: 70 })}</b></span></div>
-          <div class="tut-ip-seat me">${card(null, { down: true, cls: 'mine-hidden' }).replace('<span class="letter"></span>', '<span class="letter">?</span>')}<span>${t('me')}</span></div>
-          <div class="tut-ip-btns"><span class="b fold">${t('ip.fold')}</span><span class="b">${t('ip.callBtn', { n: 50 })}</span><span class="b gold">+50</span><span class="b gold">+100</span></div>
-        </div>`,
-      play() {
-        later(700, () => { stage.querySelector('.tut-raise').classList.add('pulse'); window.SFX && SFX.chips(); });
-      },
-    },
-    {
-      games: ['indian'],
-      title: { ko: '쇼다운과 10 벌칙', en: 'Showdown and the 10 penalty' },
-      text: {
-        ko: '베팅이 끝나면 모든 카드를 공개해요. <b>가장 높은 숫자가 팟을 가져가고, 같으면 나눠요.</b> 단, <b>10을 들고 다이하면 벌칙 100칩</b>을 내야 해요. 남이 다 이길 것처럼 굴어도, 내 카드가 10일 수 있다는 걸 잊지 마세요!',
-        en: 'When betting ends, all cards are revealed. <b>The highest number takes the pot; ties split.</b> But <b>folding while holding a 10 costs a 100-chip penalty</b>. Even when others act like winners, your card might be a 10!',
-      },
-      html: () => `<div class="tut-felt tut-ip">
-          <div class="tut-ip-seat">${card('7s', { cls: 'dim' })}<span>Leo</span></div>
-          <div class="tut-ip-seat">${card('Th', { cls: 'hl' })}<span>Mia · WIN</span></div>
-          <div class="tut-ip-seat me">${card('4h', { down: true })}<span>${t('me')}</span></div>
-          <div class="tut-badge">${L({ ko: 'Mia 승리! (10)', en: 'Mia wins with a 10!' })}</div>
-        </div>`,
-      play() {
-        const mine = stage.querySelector('.tut-ip-seat.me .card');
-        later(600, () => { mine.classList.remove('down'); window.SFX && SFX.flip(0); });
-        later(1200, () => { stage.querySelector('.tut-badge').classList.add('show'); });
-      },
-    },
-    {
-      games: ['indian'],
-      title: { ko: '지나간 카드를 세어 보세요', en: 'Count the past cards' },
-      text: {
-        ko: '덱은 다 떨어질 때까지 다시 섞지 않아요. 테이블 가운데 <b>"지나간 카드"</b>에 이미 나온 숫자가 표시되니, <b>남은 카드를 세면 내 카드를 더 잘 추리</b>할 수 있어요. 시작 칩 1,000, 참가비 20, 12라운드 후 칩이 많은 사람이 승리!',
-        en: 'The deck isn\'t reshuffled until it runs out. <b>"Past cards"</b> in the middle of the table shows numbers already used, so <b>counting what\'s left helps you guess your card</b>. Start with 1,000 chips, 20 ante, most chips after 12 rounds wins!',
-      },
-      html: () => `<div class="tut-felt"><div class="ip-discards"><em>${t('ip.discards')}</em><div class="mini-row">${['T','T','9','8','8','5','3','1'].map((v, i) => `<span class="mini-v ${i % 2 ? 'red' : ''}">${v === 'T' ? 10 : v}</span>`).join('')}</div></div>
-          <div class="tut-badge show" style="font-size:1.1rem">${L({ ko: '10이 벌써 2장 다 나왔다 → 내 카드는 10이 아니다!', en: 'Both 10s are gone → my card isn\'t a 10!' })}</div></div>`,
-      play() {},
-    },
-    {
-      games: ['memory', 'shuffle', 'nut'],
+      games: ['memory', 'nut'],
       title: { ko: "칩과 라운드", en: "Chips and rounds" },
       text: { ko: "시작 칩은 <b>1,000</b>. 라운드마다 <b>앤티(참가비)</b>를 내고 시작하며, 앤티는 50 → 300까지 점점 올라갑니다. <b>10라운드</b>가 끝났을 때 칩이 많은 쪽이 이기고, 한쪽 칩이 0이 되면 바로 게임이 끝나요.", en: "You start with <b>1,000</b> chips. Each round begins with an <b>ante</b> (entry fee) that rises from 50 to 300. After <b>10 rounds</b>, the player with more chips wins. If anyone hits 0 chips, the game ends immediately." },
       html: () => `<div class="tut-felt tut-chips">
@@ -296,7 +200,7 @@ const Tutorial = (() => {
       },
     },
     {
-      games: ['memory', 'shuffle', 'nut'],
+      games: ['memory', 'nut'],
       title: { ko: "족보 순위", en: "Hand rankings" },
       text: { ko: "위에 있을수록 강한 족보예요. 같은 족보면 더 높은 숫자가 이깁니다. (A가 가장 높고, A-2-3-4-5 스트레이트도 인정)", en: "Higher on the list beats lower. With the same hand, higher cards win. (Ace is highest, and A-2-3-4-5 counts as a straight.)" },
       html: () => `<div class="tut-ranks">${(I18N.lang === 'en' ? RANKS_EN : RANKS).map(([n, ex, d], i) =>

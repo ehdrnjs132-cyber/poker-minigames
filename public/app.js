@@ -226,6 +226,37 @@
   });
   socket.on('rooms', (list) => renderRooms(list || []));
 
+  // ---- who's online (lobby)
+  let onlineCache = [];
+  function renderOnline(list = onlineCache) {
+    onlineCache = list;
+    const box = $('#onlineList');
+    const myUid = pref.get('uid');
+    $('#onlineCount').textContent = list.length ? t('online.count', { n: list.length }) : '';
+    if (list.length <= 1) {
+      setHTML(box, `${list.map(personHTML).join('')}<div class="online-empty">${t('online.empty')}</div>`);
+      return;
+    }
+    setHTML(box, list.map(personHTML).join(''));
+    function personHTML(u) {
+      const isMe = u.uid === myUid;
+      const r = u.room;
+      const game = r ? t(`game.${r.gameId}`) : '';
+      const status = !r ? t('online.lobby') : r.playing ? t('online.playing', { game }) : t('online.waiting', { game });
+      const canJoin = r && r.joinable && !isMe;
+      return `<div class="person${r ? (r.playing ? ' busy' : ' waiting') : ''}${isMe ? ' me' : ''}">
+        <div class="avatar" style="background:${colorFor(u.uid)}">${avatarInner(u)}</div>
+        <div class="p-info"><b>${esc(u.name)}${isMe ? `<em>${t('online.me')}</em>` : ''}</b><span><i class="dot"></i>${esc(status)}</span></div>
+        ${canJoin ? `<button class="btn gold small" data-join="${r.code}">${t('online.join')}</button>` : ''}
+      </div>`;
+    }
+  }
+  $('#onlineList').addEventListener('click', (e) => {
+    const b = e.target.closest('[data-join]');
+    if (b) join(b.dataset.join);
+  });
+  socket.on('online', (list) => renderOnline(list || []));
+
   // ---- invite links (?room=CODE): show what you're joining; join at once if we know your name
   let inviteHandled = false;
   function handleInvite() {
@@ -382,10 +413,6 @@
       for (const h of S.result.hands) if (S.result.winners.includes(h.id)) (h.best || []).forEach((c) => hlCards.add(c));
     }
     const ctx = { me, opp, opps, inResult, hlCards };
-    const indian = S.game === 'indian';
-    $('#room').classList.toggle('game-indian', indian);
-    if (indian) renderIndianCenter();
-
     $('#roomCode').textContent = S.code;
     $('#roundInfo').textContent = S.round ? `${S.round}/${S.maxRounds}` : '-';
     $('#anteInfo').textContent = S.ante ? fmt(S.ante) : '-';
@@ -393,12 +420,9 @@
 
     renderOpps(ctx);
     renderSeat($('#seatMe'), me, true, ctx);
-    if (!indian) {
-      renderGrid(ctx);
-      runShuffle();
-      renderBoard(ctx);
-    }
-    renderStatus(ctx);
+    renderGrid(ctx);
+    renderBoard(ctx);
+    renderGridStatus(ctx);
     renderActions(ctx);
     renderOverlay(ctx);
     phaseEffects(ctx);
@@ -438,7 +462,6 @@
     const ph = S.phase;
     const hand = inResult && S.result ? S.result.hands.find((h) => h.id === p.id) : null;
     const isWinner = hand && S.result.winners.includes(p.id);
-    if (S.game === 'indian') return renderIndianSeat(el, p, isMe, hand, isWinner);
     const turn = ph === 'bet' && S.turn === p.id;
     el.className = `seat ${isMe ? 'me' : 'opp'}${isWinner ? ' winner' : ''}${p.out ? ' out' : ''}${p.folded ? ' folded' : ''}${turn ? ' turn' : ''}`;
 
@@ -499,9 +522,6 @@
       <div class="hole">${hole}</div>`);
   }
 
-  // ---------------------------------------------------------- Indian Poker
-  const cardValue = (code) => (code ? (code[0] === 'T' ? 10 : Number(code[0])) : 0);
-
   function actionLabel(a) {
     if (!a) return '';
     if (a.kind === 'check') return t('ip.check');
@@ -510,82 +530,6 @@
     if (a.kind === 'allin') return t('ip.allin');
     if (a.kind === 'fold') return t('ip.fold');
     return '';
-  }
-
-  function renderIndianSeat(el, p, isMe, hand, isWinner) {
-    const ph = S.phase;
-    const turn = ph === 'bet' && S.turn === p.id;
-    el.className = `seat ${isMe ? 'me' : 'opp'} indian${isWinner ? ' winner' : ''}${p.out ? ' out' : ''}${p.folded ? ' folded' : ''}${turn ? ' turn' : ''}`;
-
-    let badge = '';
-    if (p.out && ph !== 'lobby' && ph !== 'gameover') badge = `<span class="badge warn">${t('badge.out')}</span>`;
-    else if (!p.connected) badge = `<span class="badge warn">${t('badge.off')}</span>`;
-    else if (ph === 'lobby' || ph === 'gameover') badge = p.ready ? `<span class="badge ok">${t('badge.ready')}</span>` : `<span class="badge">${t('badge.wait')}</span>`;
-    else if (ph === 'bet') {
-      if (turn) badge = `<span class="badge think dots">${t('ip.thinking')}</span>`;
-      else if (p.lastAction) badge = `<span class="badge ${p.folded ? 'warn' : 'ok'}">${actionLabel(p.lastAction)}</span>`;
-    } else if (hand) {
-      badge = `<span class="badge hand">${hand.folded ? t('ip.fold') : t('ip.value', { n: hand.value })}</span>`;
-      if (hand.penalty) badge += `<span class="badge warn">${t('ip.penalty', { n: hand.penalty })}</span>`;
-    }
-
-    let delta = '';
-    if (ph === 'showdown' && hand) {
-      const net = (isWinner ? S.result.share : 0) - S.result.ante - hand.bet - hand.penalty;
-      if (net) delta = `<span class="delta ${net > 0 ? 'plus' : 'minus'}">${net > 0 ? '+' : ''}${fmt(net)}</span>`;
-    }
-    const betChip = ph === 'bet' && p.bet ? `<span class="bet-chip"><span class="chip-icon"></span>${fmt(p.bet)}</span>` : '';
-    const dealer = S.dealerId === p.id && ph !== 'lobby' ? `<span class="dealer-btn" title="${t('ip.dealer')}">D</span>` : '';
-
-    // The forehead card: everyone else's is visible, your own stays a "?" until the reveal.
-    let card = '<div class="slot"></div>';
-    if (p.card) card = cardHTML(p.card, '', { cls: `${ph === 'showdown' && isMe ? 'pop ' : ''}${isWinner ? 'hl' : ''}` });
-    else if (p.hasCard) card = cardHTML(null, '?', { down: true, cls: isMe ? 'mine-hidden' : '' });
-
-    const botTag = p.bot ? `<span class="bot-tag">BOT·${t(`lvl.${p.bot}`)}</span>` : '';
-    const removeBtn = p.bot && ph === 'lobby' ? `<button class="seat-x" data-act="removeBot" data-id="${p.id}" aria-label="${t('bot.remove')}" title="${t('bot.remove')}">×</button>` : '';
-    setHTML(el, `
-      ${removeBtn}${dealer}
-      <div class="avatar${p.connected ? '' : ' off'}${p.bot ? ' bot' : ''}" style="background:${colorFor(p.id)}">${avatarInner(p)}</div>
-      <div class="who">
-        <div class="name">${esc(p.name)}${isMe ? `<em>${t('me')}</em>` : ''}${botTag}</div>
-        <div class="chips"><span class="chip-icon"></span>${fmt(p.chips)} ${delta}</div>
-        ${badge}
-      </div>
-      ${betChip}
-      <div class="hole forehead">${card}</div>`);
-  }
-
-  function renderIndianCenter() {
-    const box = $('#indianCenter');
-    if (S.phase === 'lobby') {
-      setHTML(box, `<div class="ip-rules">${t('ip.lobbyRules', { n: S.tenPenalty || 100 })}</div>`);
-      return;
-    }
-    const fresh = S.reshuffledAt === S.round && S.phase === 'bet';
-    const discards = (S.discards || []).map((c) => `<span class="mini-v ${'h'.includes(c[1]) ? 'red' : ''}">${cardValue(c)}</span>`).join('');
-    setHTML(box, `
-      <div class="ip-stats">
-        <span><em>${t('ip.toBeat')}</em><b>${fmt(S.currentBet || 0)}</b></span>
-        <span><em>${t('ip.deck')}</em><b>${S.deckLeft ?? '-'}</b>${fresh ? `<i class="ip-new">${t('ip.reshuffled')}</i>` : ''}</span>
-      </div>
-      <div class="ip-discards">
-        <em>${t('ip.discards')}</em>
-        <div class="mini-row">${discards || `<span class="none">${t('ip.noDiscards')}</span>`}</div>
-      </div>`);
-  }
-
-  function indianReason() {
-    const r = S.result;
-    if (!r) return '';
-    const mine = r.hands.find((h) => h.id === S.me);
-    const nameOf = (id) => S.players.find((p) => p.id === id)?.name || '';
-    if (r.uncontested) {
-      return r.winners[0] === S.me ? t('ip.whyAllFold') : t('ip.whyOthersWin', { name: nameOf(r.winners[0]) });
-    }
-    if (!mine) return '';
-    if (r.winners.length > 1) return t('ip.whyTie', { n: r.hands.find((h) => h.id === r.winners[0]).value });
-    return t('ip.whyMine', { n: mine.value });
   }
 
   function renderGrid({ me, opps, inResult, hlCards }) {
@@ -639,71 +583,6 @@
       setHTML(el.querySelector('.tag'),
         (isNuts ? '<span class="t-nuts">NUTS</span>' : '') + (mine ? `<span class="t-me">${t('me')}</span>` : '') + shown + more);
     });
-  }
-
-  // Shell-game animation: plays the server's swap list on the face-down grid.
-  // Each swap moves the two card nodes visually, then swaps them in the DOM so
-  // grid index i always matches server position i afterwards.
-  let shuffleRun = null; // { key, queue, timer }
-  function swapNodes(a, b) {
-    const t = document.createElement('div');
-    a.parentNode.insertBefore(t, a);
-    b.parentNode.insertBefore(a, b);
-    t.parentNode.insertBefore(b, t);
-    t.remove();
-  }
-  function finishShuffle() {
-    if (!shuffleRun) return;
-    clearTimeout(shuffleRun.timer);
-    const g = $('#grid');
-    for (const el of g.children) { el.style.transition = ''; el.style.transform = ''; el.classList.remove('moving'); }
-    while (shuffleRun.queue.length) {
-      const [a, b] = shuffleRun.queue.shift();
-      const cards = [...g.children];
-      swapNodes(cards[a], cards[b]);
-    }
-    shuffleRun.done = true;
-  }
-  function runShuffle() {
-    if (S.phase !== 'shuffle') {
-      if (shuffleRun && !shuffleRun.done) finishShuffle();
-      return;
-    }
-    if (!S.shuffle || shuffleRun?.key === S.dealId) return;
-    if (shuffleRun && !shuffleRun.done) finishShuffle();
-    const { swaps, stepMs, leadMs } = S.shuffle;
-    shuffleRun = { key: S.dealId, queue: swaps.slice(), timer: null, done: false };
-    const run = shuffleRun;
-    const g = $('#grid');
-    const moveMs = Math.round(stepMs * 0.78);
-    const step = () => {
-      if (run !== shuffleRun || run.done) return;
-      if (!run.queue.length) { run.done = true; return; }
-      const [a, b] = run.queue[0];
-      const cards = [...g.children];
-      const A = cards[a], B = cards[b];
-      const ra = A.getBoundingClientRect(), rb = B.getBoundingClientRect();
-      const dx = rb.left - ra.left, dy = rb.top - ra.top;
-      for (const [el, sx, sy] of [[A, dx, dy], [B, -dx, -dy]]) {
-        el.classList.add('moving');
-        el.style.transition = `transform ${moveMs}ms cubic-bezier(.55,0,.25,1)`;
-        el.style.transform = `translate(${sx}px, ${sy}px)`;
-      }
-      SFX.swoosh();
-      run.timer = setTimeout(() => {
-        if (run !== shuffleRun || run.done) return;
-        run.queue.shift();
-        for (const el of [A, B]) { el.style.transition = 'none'; el.style.transform = ''; el.classList.remove('moving'); }
-        swapNodes(A, B);
-        reflow(A);
-        A.style.transition = B.style.transition = '';
-        run.timer = setTimeout(step, stepMs - moveMs);
-      }, moveMs);
-    };
-    // If we arrive late (e.g. reconnect), there's nothing visible to track; just apply.
-    const lateBy = S.deadline ? (S.durations.shuffle - (S.deadline - (Date.now() + offset))) : 0;
-    if (lateBy > leadMs + stepMs) finishShuffle();
-    else run.timer = setTimeout(step, Math.max(0, leadMs - lateBy));
   }
 
   function renderBoard({ inResult, hlCards }) {
@@ -775,34 +654,6 @@
     return others.some((h) => I18N.hand(h.score) === handName) ? t('why.kickerWin', { hand: handName }) : '';
   }
 
-  function renderStatus(ctx) {
-    if (S.game === 'indian') return renderIndianStatus(ctx);
-    renderGridStatus(ctx);
-  }
-
-  function renderIndianStatus({ me, opp }) {
-    const ph = S.phase;
-    const turnP = S.players.find((p) => p.id === S.turn);
-    const myTurn = ph === 'bet' && S.turn === S.me;
-    const label = {
-      lobby: opp ? t('ph.lobbyReady') : t('ph.lobbyWait'),
-      bet: myTurn ? t('ip.yourTurn') : t('ip.turnOf', { name: turnP?.name || '' }),
-      showdown: t('ph.showdown'),
-      gameover: t('ph.gameover'),
-    }[ph] || '';
-    const sub = {
-      lobby: [t('game.indian'), t('sub.count', { n: S.players.length, max: S.maxPlayers }), opp ? t('sub.lobbyOpp') : t('sub.lobbyCode', { code: S.code }), t('ip.turnTime', { p: Math.round(S.durations.bet / 1000) })].join(' · '),
-      bet: myTurn && S.toCall ? t('ip.toCall', { n: fmt(S.toCall) }) : t('ip.betHint'),
-      showdown: indianReason(),
-    }[ph] || '';
-    $('#phaseLabel').textContent = label;
-    $('#phaseSub').textContent = sub;
-    showBanner(() => {
-      const mine = S.result.hands.find((h) => h.id === S.me);
-      return mine ? t('ip.myCard', { n: mine.value }) : '';
-    }, indianReason);
-  }
-
   // ---------------------------------------------------------- winner spotlight
   // Once per showdown: a full-screen moment naming who won and with what.
   const CROWN = '<svg viewBox="0 0 64 44" aria-hidden="true"><defs><linearGradient id="spG" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#fff2b8"/><stop offset=".5" stop-color="#f5c451"/><stop offset="1" stop-color="#a06c17"/></linearGradient></defs><path d="M4 14l14 10L32 4l14 20 14-10-6 26H10z" fill="url(#spG)" stroke="#6b450c" stroke-width="2" stroke-linejoin="round"/><circle cx="32" cy="4" r="4" fill="#e3283a"/><circle cx="4" cy="14" r="3.5" fill="#2f7bff"/><circle cx="60" cy="14" r="3.5" fill="#2f7bff"/></svg>';
@@ -812,7 +663,7 @@
     if (ph === 'showdown' && P?.phase !== 'showdown' && S.result) {
       clearTimeout(bannerTimer);
       // Let the table reveal play first, then take the stage.
-      const delay = S.game === 'indian' ? 700 : S.game === 'nut' ? 500 : 1300;
+      const delay = S.game === 'nut' ? 500 : 1300;
       const d = detail();
       const why = reason();
       bannerTimer = setTimeout(() => openSpotlight(d, why), delay);
@@ -830,15 +681,11 @@
     const iWon = r.winners.includes(S.me);
     const split = winners.length > 1;
     const wHand = r.hands.find((h) => h.id === r.winners[0]);
-    const indian = S.game === 'indian';
-    const handName = r.uncontested ? t('sp.allFold')
-      : indian ? t('sp.indianWin', { n: wHand.value }) : I18N.hand(wHand.score);
+    const handName = r.uncontested ? t('sp.allFold') : I18N.hand(wHand.score);
     const title = split ? t('sp.split') : iWon ? t('sp.youWin') : t('sp.wins', { name: winners[0].name });
 
     let cards = '';
-    if (indian) {
-      cards = winners.map((w, i) => cardHTML(r.hands.find((h) => h.id === w.id).card, '', { cls: 'sp-card big', style: `--i:${i}` })).join('');
-    } else if (!r.uncontested) {
+    if (!r.uncontested) {
       const own = new Set(wHand.cards);
       cards = wHand.best.map((c, i) => cardHTML(c, '', { cls: `sp-card${own.has(c) ? ' own' : ''}`, style: `--i:${i}` })).join('');
     }
@@ -865,7 +712,7 @@
     SFX.spotlight();
     setTimeout(() => (split ? SFX.split() : iWon ? SFX.win() : SFX.lose()), 650);
     clearTimeout(openSpotlight._t);
-    openSpotlight._t = setTimeout(() => closeSpotlight(), indian ? 3800 : 4600);
+    openSpotlight._t = setTimeout(() => closeSpotlight(), 4600);
   }
 
   function closeSpotlight(instant) {
@@ -934,7 +781,6 @@
       lobby: opp ? t('ph.lobbyReady') : t('ph.lobbyWait'),
       memorize: t('ph.memorize'),
       reveal: t('ph.reveal'),
-      shuffle: t('ph.shuffle'),
       pick: nut ? t('ph.nutPick') : t('ph.pick'),
       bet: S.turn === S.me ? t('bet.yourTurn') : t('ip.turnOf', { name: S.players.find((p) => p.id === S.turn)?.name || '' }),
       showdown: t('ph.showdown'),
@@ -949,13 +795,11 @@
         t('sub.count', { n: S.players.length, max: S.maxPlayers }),
         opp ? t('sub.lobbyOpp') : t('sub.lobbyCode', { code: S.code }),
         times,
-        S.settings?.swaps ? t('sub.swaps', { n: S.settings.swaps }) : '',
         S.betting ? t('bet.on') : '',
       ].filter(Boolean).join(' · '),
       bet: S.turn === S.me && S.toCall ? t('ip.toCall', { n: fmt(S.toCall) }) : t('bet.hint'),
       memorize: t('sub.memorize', { m: memSec }),
-      reveal: S.game === 'shuffle' ? t('sub.revealShuffle') : t('sub.reveal'),
-      shuffle: t('sub.shuffle'),
+      reveal: t('sub.reveal'),
       pick: nut ? t('sub.nutPick') : t('sub.pick'),
       showdown: S.result ? outcomeReason() || t('sub.pot', { n: fmt(S.result.pot) }) : '',
       gameover: '',
@@ -989,8 +833,6 @@
         : `<button class="btn blue big" data-act="memorized">${t('act.memorized')}</button>`;
     } else if (ph === 'reveal') {
       html = `<span class="hint">${t('hint.focus')}</span>`;
-    } else if (ph === 'shuffle') {
-      html = `<span class="hint">${t('hint.shuffle')}</span>`;
     } else if (ph === 'pick') {
       html = me.locked
         ? `<span class="hint dots">${t('hint.oppPicking')}</span>`
@@ -1072,12 +914,6 @@
       // Chip sound whenever someone puts money in.
       if (P?.phase === 'bet' && P?.dealId === S.dealId && S.pot > P.pot) SFX.chips();
     }
-    if (S.game === 'indian') {
-      if (S.phase === 'bet' && P?.dealId !== S.dealId) SFX.deal();
-      if (S.phase === 'showdown' && P?.phase !== 'showdown') { SFX.flip(0.1); SFX.flipWave(S.players.length, 0.08, 0.2); }
-      if (S.phase === 'gameover' && P?.phase !== 'gameover' && S.final?.championId === S.me) SFX.fanfare();
-      return;
-    }
     if (P?.phase === S.phase && P?.dealId === S.dealId) return;
     switch (S.phase) {
       case 'memorize':
@@ -1104,6 +940,7 @@
   I18N.onChange(() => {
     if ($('#setup').classList.contains('show')) renderSetup();
     renderRooms();
+    renderOnline();
     renderInvite();
     if (S) render();
   });

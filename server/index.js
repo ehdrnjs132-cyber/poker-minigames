@@ -6,9 +6,7 @@ const { Server } = require('socket.io');
 
 const GAMES = {
   memory: require('./games/memoryPoker'),
-  shuffle: require('./games/shuffleMemory'),
   nut: require('./games/nutRace'),
-  indian: require('./games/indianPoker'),
 };
 const Bots = require('./bots');
 const store = require('./store');
@@ -132,11 +130,42 @@ function roomList() {
 
 let announceTimer = null;
 function announceRooms() {
+  announceOnline(); // room status shows up next to each person
   if (announceTimer) return;
   announceTimer = setTimeout(() => {
     announceTimer = null;
     io.to('lobby').emit('rooms', roomList());
   }, 300);
+}
+
+// ---- who's online ---------------------------------------------------------
+// Every socket that said hello, deduped by profile (several tabs = one person).
+// Someone sitting in a room wins over their idle lobby tab.
+const online = new Map(); // socket.id -> { uid, room }
+function onlineList() {
+  const byUid = new Map();
+  for (const { uid, room } of online.values()) {
+    if (!uid) continue;
+    const prev = byUid.get(uid);
+    if (prev && prev.room) continue;
+    byUid.set(uid, { uid, room: room && rooms.has(room.code) ? room : null });
+  }
+  return [...byUid.values()].map(({ uid, room }) => {
+    const u = profiles.getUser(uid) || {};
+    const r = room && roomSummary(room);
+    return {
+      uid, name: u.name || 'Player', avatar: u.avatar || null, avatarV: u.avatarV || 0,
+      room: r ? { code: r.code, gameId: r.gameId, playing: r.playing, joinable: r.joinable } : null,
+    };
+  }).sort((a, b) => Number(!!a.room) - Number(!!b.room) || a.name.localeCompare(b.name)).slice(0, 60);
+}
+let onlineTimer = null;
+function announceOnline() {
+  if (onlineTimer) return;
+  onlineTimer = setTimeout(() => {
+    onlineTimer = null;
+    io.to('lobby').emit('online', onlineList());
+  }, 400);
 }
 
 function addBot(room, level) {
@@ -165,6 +194,8 @@ io.on('connection', (socket) => {
 
   socket.join('lobby');
   socket.emit('rooms', roomList());
+  socket.emit('online', onlineList());
+  online.set(socket.id, { uid: null, room: null });
 
   // ---- profile (no password: browser-held id + token) ----
   let uid = null;
@@ -172,6 +203,8 @@ io.on('connection', (socket) => {
     const res = profiles.hello(payload || {});
     if (res.invalid) return reply(ack, { ok: false, code: 'me.badCode' });
     uid = res.uid;
+    online.get(socket.id).uid = uid;
+    announceOnline();
     reply(ack, { ok: true, ...res });
   });
 
@@ -190,6 +223,7 @@ io.on('connection', (socket) => {
       }
       if (touched) room.broadcast();
     }
+    announceOnline();
     reply(ack, { ok: true, user: res.user });
   });
 
@@ -215,6 +249,7 @@ io.on('connection', (socket) => {
     player.socketId = socket.id;
     player.connected = true;
     ctx = { room, player };
+    online.get(socket.id).room = room;
     socket.leave('lobby');
     clearTimeout(room.cleanupTimer);
     socket.emit('chatHistory', room.chat);
@@ -225,8 +260,11 @@ io.on('connection', (socket) => {
     if (!ctx) return;
     const { room, player } = ctx;
     ctx = null;
+    online.get(socket.id).room = null;
     socket.join('lobby');
     socket.emit('rooms', roomList());
+    socket.emit('online', onlineList());
+    announceOnline();
     // Walking out of a game in progress counts as finishing last.
     const phase = room.game.phase;
     if (!['lobby', 'gameover'].includes(phase) && !room.game.ps.get(player.id)?.out) {
@@ -300,6 +338,8 @@ io.on('connection', (socket) => {
   socket.on('leave', () => detach());
 
   socket.on('disconnect', () => {
+    online.delete(socket.id);
+    announceOnline();
     if (!ctx) return;
     const { room, player } = ctx;
     if (player.socketId !== socket.id) return;

@@ -1,4 +1,4 @@
-﻿// Korean / English strings. t('key', {vars}) → text in the current language.
+// Korean / English strings. t('key', {vars}) → text in the current language.
 const I18N = (() => {
   const D = {
     ko: {
@@ -53,6 +53,7 @@ const I18N = (() => {
       'ph.nutPick': '가장 강한 2장을 찾아라!', 'sub.nutPick': '족보가 같으면 먼저 확정한 사람이 승리', 'sub.nutTime': '제한 {p}초',
       'game.indian': '인디언 포커', 'game.indian.desc': '내 카드만 안 보여요! 다른 사람 카드와 베팅으로 내 숫자를 추리하세요. 10 들고 다이하면 벌칙.',
       'game.indian.meta': '2~6인 · 약 6분', 'setup.turn': '한 턴 시간',
+      'online.title': '접속 중', 'online.count': '{n}명', 'online.empty': '지금은 나 혼자예요. 친구에게 주소를 보내 보세요!', 'online.lobby': '로비', 'online.waiting': '{game} 대기 중', 'online.playing': '{game} 게임 중', 'online.me': '나', 'online.join': '같이 하기',
       'rooms.title': '열린 방', 'rooms.count': '{n}개', 'rooms.empty': '아직 열린 방이 없어요. 위에서 게임을 골라 방을 만들어 보세요!',
       'rooms.waiting': '대기 중', 'rooms.playing': '게임 중', 'rooms.full': '꽉 참', 'rooms.host': '{name}님의 방',
       'rooms.players': '{n}/{max}명', 'rooms.bots': '봇 {n}',
@@ -141,6 +142,7 @@ const I18N = (() => {
       'ph.nutPick': 'Find the strongest 2!', 'sub.nutPick': 'Equal hands go to whoever locked in first', 'sub.nutTime': '{p}s limit',
       'game.indian': 'Indian Poker', 'game.indian.desc': "You can't see your own card! Read the others' cards and bets to guess yours. Folding a 10 costs a penalty.",
       'game.indian.meta': '2–6 players · ~6 min', 'setup.turn': 'Turn time',
+      'online.title': 'Online now', 'online.count': '{n}', 'online.empty': "It's just you right now. Send your friends the link!", 'online.lobby': 'In lobby', 'online.waiting': 'Waiting · {game}', 'online.playing': 'Playing {game}', 'online.me': 'me', 'online.join': 'Join',
       'rooms.title': 'Open rooms', 'rooms.count': '{n}', 'rooms.empty': 'No open rooms yet. Pick a game above and create one!',
       'rooms.waiting': 'Waiting', 'rooms.playing': 'In game', 'rooms.full': 'Full', 'rooms.host': "{name}'s room",
       'rooms.players': '{n}/{max} players', 'rooms.bots': '{n} bots',

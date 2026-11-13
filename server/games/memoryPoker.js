@@ -1,4 +1,4 @@
-﻿const crypto = require('crypto');
+const crypto = require('crypto');
 const { makeDeck, shuffle } = require('../cards');
 const { bestHand, compareScores } = require('../handEval');
 const Bots = require('../bots');
@@ -36,8 +36,7 @@ const clampInt = (v, def, min, max) => {
  * round follows, where players bet on how well they remembered. Best 5 of 7
  * among players who didn't fold wins. 2–6 players; busted players are out.
  *
- * This is also the base class for the other games (shuffleMemory.js,
- * nutRace.js, indianPoker.js), which override the hooks below. It holds the
+ * This is also the base class for the other games (nutRace.js), which override the hooks below. It holds the
  * shared lobby / ready / elimination / bot plumbing and the betting engine.
  * The server is authoritative: grid cards are only sent to clients in the
  * phases listed by gridPhases().
