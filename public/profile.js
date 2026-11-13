@@ -2,7 +2,7 @@
 (() => {
   const $ = (s) => document.querySelector(s);
   const { socket, toast, esc, fmt, setHTML } = window.HA;
-  const GAMES = ['memory', 'nut'];
+  const GAMES = ['memory', 'nut', 'indian'];
   const MEDALS = ['🥇', '🥈', '🥉'];
   let rankGame = 'memory';
   let rankData = null;
@@ -11,7 +11,7 @@
   const avatar = (u) => `<div class="avatar">${window.HA.avatarInner({ ...u, uid: u.id })}</div>`;
   const winRate = (w, g) => (g ? Math.round((w / g) * 100) : 0);
   const bestText = (game, s) =>
-    s.bestScore ? I18N.hand(s.bestScore) : '—';
+    game === 'indian' ? (s.bestCard ? t('rank.bestCard', { n: s.bestCard }) : '—') : s.bestScore ? I18N.hand(s.bestScore) : '—';
 
   function open(panel) {
     panel.classList.add('show');

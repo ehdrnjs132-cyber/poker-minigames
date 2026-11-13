@@ -359,10 +359,18 @@ class MemoryPoker {
       }
       case 'raise': {
         const cap = this.cap();
-        if (this.raises >= CFG.maxRaises || cap <= this.currentBet) return false;
-        const step = action.amount === 'allin' ? Infinity : Number(action.amount);
-        if (step !== Infinity && !CFG.raiseSteps.includes(step)) return false;
-        const target = Math.min(this.currentBet + step, cap);
+        if (this.raises >= this.maxRaisesN() || cap <= this.currentBet) return false;
+        let target;
+        if (action.to != null && this.freeRaise()) {
+          // Any amount from the minimum raise up to the cap (all-in).
+          const to = Math.round(Number(action.to));
+          if (!Number.isFinite(to)) return false;
+          target = Math.min(cap, Math.max(to, this.currentBet + this.minRaise()));
+        } else {
+          const step = action.amount === 'allin' ? Infinity : Number(action.amount);
+          if (step !== Infinity && !CFG.raiseSteps.includes(step)) return false;
+          target = Math.min(this.currentBet + step, cap);
+        }
         const pay = target - s.bet;
         if (pay <= 0 || pay > s.chips) return false;
         s.chips -= pay;
@@ -387,6 +395,11 @@ class MemoryPoker {
     return true;
   }
 
+  // Variants can open up betting (free raise amounts, more raises).
+  freeRaise() { return false; }
+  minRaise() { return CFG.raiseSteps[0]; }
+  maxRaisesN() { return CFG.maxRaises; }
+
   // Shared bot betting brain: compare win chance with pot odds.
   botBetDecision(p) {
     const L = { easy: { noise: 0.3, bluff: 0.05 }, normal: { noise: 0.12, bluff: 0.1 }, hard: { noise: 0.04, bluff: 0.14 } }[p.bot]
@@ -395,7 +408,7 @@ class MemoryPoker {
     let win = this.botWinChance(p);
     win = Math.min(1, Math.max(0, win + (crypto.randomInt(2001) / 1000 - 1) * L.noise));
     const toCall = this.currentBet - s.bet;
-    const canRaise = this.raises < CFG.maxRaises && this.cap() > this.currentBet && s.chips > toCall;
+    const canRaise = this.raises < this.maxRaisesN() && this.cap() > this.currentBet && s.chips > toCall;
     const roll = crypto.randomInt(1000) / 1000;
     const raise = (amount) => ({ type: 'raise', amount });
     if (toCall === 0) {
@@ -671,8 +684,10 @@ class MemoryPoker {
       toCall: me ? Math.max(0, this.currentBet - me.bet) : 0,
       cap: this.phase === 'bet' ? this.cap() : 0,
       raises: this.raises,
-      maxRaises: CFG.maxRaises,
+      maxRaises: this.maxRaisesN(),
       raiseSteps: CFG.raiseSteps,
+      freeRaise: this.freeRaise(),
+      minRaise: this.minRaise(),
       dealerId: this.players[this.dealerIdx]?.id || null,
     };
   }

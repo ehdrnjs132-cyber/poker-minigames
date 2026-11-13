@@ -410,6 +410,14 @@
     const b = e.target.closest('[data-act]');
     if (!b || b.disabled) return;
     const a = b.dataset.act;
+    if (a === 'ipQuick') {
+      ipRaiseTo = Number(b.dataset.to);
+      const sl = $('#ipSlider');
+      if (sl) sl.value = String(ipRaiseTo);
+      ipRaiseLabel();
+      return SFX.click();
+    }
+    if (a === 'raiseTo') { SFX.chips(); return act('raise', { to: ipRaiseTo }); }
     if (a === 'invite') return copyInvite();
     if (a === 'exit') return $('#leaveBtn').click();
     if (a === 'lock') SFX.lock(); else SFX.click();
@@ -453,6 +461,17 @@
     $('#watchCount').textContent = watchers.length;
     $('#watchInfo').title = watchers.map((w) => w.name).join(', ');
     $('#room').classList.toggle('watching', !!S.spectator);
+    $('#room').classList.toggle('game-indian', S.game === 'indian');
+
+    if (S.game === 'indian') {
+      renderIndian(ctx);
+      renderActions(ctx);
+      renderOverlay(ctx);
+      phaseEffects(ctx);
+      ipChipFly();
+      if (S.notice && JSON.stringify(S.notice) !== JSON.stringify(P?.notice)) toast(I18N.msg(S.notice), 3500);
+      return;
+    }
 
     renderOpps(ctx);
     renderSeat($('#seatMe'), me, true, ctx);
@@ -698,6 +717,276 @@
     return others.some((h) => I18N.hand(h.score) === handName) ? t('why.kickerWin', { hand: handName }) : '';
   }
 
+
+  // ============================================================ Indian Poker
+  // Its own interface: a big oval table with up to 6 seats around it; every
+  // character wears their card above the head (yours stays a "?").
+  const ipValue = (c) => (c ? (c[0] === 'T' ? 10 : Number(c[0])) : 0);
+  // Seat anchor points (% of the table box): landscape and portrait tables.
+  const IP_SLOTS = {
+    wide: [[50, 89], [10, 63], [17, 17], [50, 6], [83, 17], [90, 63]],
+    tall: [[50, 88], [13, 66], [13, 31], [50, 9], [87, 31], [87, 66]],
+  };
+  const IP_ORDER = { 1: [0], 2: [0, 3], 3: [0, 2, 4], 4: [0, 1, 3, 5], 5: [0, 1, 2, 4, 5], 6: [0, 1, 2, 3, 4, 5] };
+  let ipRaiseTo = 0;
+  let ipRaiseKey = '';
+  let ipFlipped = -1;
+
+  function ipBuild() {
+    const box = $('#ipTable');
+    if (box._built) return;
+    box._built = true;
+    box.innerHTML = `
+      <div class="ip-oval" id="ipOval">
+        <div class="ip-rail"></div>
+        <div class="ip-felt"><div class="ip-logo">INDIAN POKER</div></div>
+        <div class="ip-center" id="ipCenter"></div>
+        <div class="ip-seats" id="ipSeats"></div>
+      </div>
+      <div class="ip-bar" id="ipActions"></div>`;
+    $('#ipActions').addEventListener('click', onActionClick);
+    $('#ipActions').addEventListener('input', (e) => {
+      if (e.target.id !== 'ipSlider') return;
+      ipRaiseTo = Number(e.target.value);
+      ipRaiseLabel();
+    });
+    $('#ipSeats').addEventListener('click', (e) => {
+      const b = e.target.closest('[data-act="removeBot"]');
+      if (!b) return;
+      SFX.click();
+      act('removeBot', { id: b.dataset.id });
+    });
+  }
+
+  function ipSeatOrder() {
+    const list = S.players;
+    const meIdx = list.findIndex((p) => p.id === S.me);
+    const ordered = meIdx >= 0 ? [...list.slice(meIdx), ...list.slice(0, meIdx)] : list.slice();
+    // One open chair while the waiting room has space.
+    if (S.phase === 'lobby' && ordered.length < S.maxPlayers) ordered.push(null);
+    return ordered.slice(0, 6);
+  }
+
+  function renderIndian({ inResult }) {
+    ipBuild();
+    const oval = $('#ipOval');
+    const tall = oval.clientHeight > oval.clientWidth;
+    const slots = IP_SLOTS[tall ? 'tall' : 'wide'];
+    const seated = ipSeatOrder();
+    const order = IP_ORDER[Math.max(1, seated.length)];
+    const box = $('#ipSeats');
+    const wanted = new Set();
+
+    seated.forEach((p, i) => {
+      const [x, y] = slots[order[i]];
+      const id = p ? p.id : 'empty';
+      wanted.add(id);
+      let el = box.querySelector(`.iseat[data-id="${id}"]`);
+      if (!el) {
+        el = document.createElement('div');
+        el.dataset.id = id;
+        box.appendChild(el);
+      }
+      el.style.left = `${x}%`;
+      el.style.top = `${y}%`;
+      // Bet chips sit between the seat and the pot.
+      el.style.setProperty('--bx', `${((50 - x) / 100) * oval.clientWidth * 0.34}px`);
+      el.style.setProperty('--by', `${((50 - y) / 100) * oval.clientHeight * 0.34}px`);
+      if (!p) {
+        el.className = 'iseat empty';
+        setHTML(el, `<div class="is-avatar-wrap"><div class="is-avatar avatar empty-av">+</div></div><div class="is-plate"><b class="dots">${t('seat.waiting')}</b></div>`);
+        return;
+      }
+      const isMe = p.id === S.me;
+      const hand = inResult && S.result ? S.result.hands.find((h) => h.id === p.id) : null;
+      const isWinner = !!hand && S.result.winners.includes(p.id);
+      const turn = S.phase === 'bet' && S.turn === p.id;
+      el.className = `iseat${isMe ? ' me' : ''}${turn ? ' turn' : ''}${isWinner ? ' winner' : ''}${p.folded ? ' folded' : ''}${(p.out && !p.pending) ? ' out' : ''}${y < 50 ? ' top' : ''}`;
+      setHTML(el, ipSeatHTML(p, isMe, hand, isWinner));
+    });
+    [...box.children].forEach((el) => !wanted.has(el.dataset.id) && el.remove());
+
+    // My card flips over at the showdown (once per deal).
+    if (S.phase === 'showdown' && ipFlipped !== S.dealId) {
+      const mine = box.querySelector('.iseat.me .ip-card.down');
+      if (mine) {
+        ipFlipped = S.dealId;
+        reflow(mine);
+        setTimeout(() => { mine.classList.remove('down'); SFX.flip(0); }, 650);
+      }
+    }
+    setHTML($('#ipCenter'), ipCenterHTML());
+    renderIndianStatus();
+  }
+
+  function ipSeatHTML(p, isMe, hand, isWinner) {
+    const ph = S.phase;
+    const turn = ph === 'bet' && S.turn === p.id;
+    let card = '';
+    if (p.card) {
+      // My own card: face down first at the showdown, then it flips.
+      const flipPending = isMe && ph === 'showdown' && ipFlipped !== S.dealId;
+      card = cardHTML(p.card, '', { down: flipPending, cls: `ip-card${isWinner ? ' hl' : ''}` });
+    } else if (p.hasCard) card = cardHTML(null, '?', { down: true, cls: `ip-card${isMe ? ' mine-hidden' : ''}` });
+
+    let badge = '';
+    if (p.pending && ph !== 'lobby' && ph !== 'gameover') badge = `<span class="badge ok">${t('badge.nextRound')}</span>`;
+    else if (p.out && ph !== 'lobby' && ph !== 'gameover') badge = `<span class="badge warn">${t('badge.out')}</span>`;
+    else if (!p.connected) badge = `<span class="badge warn">${t('badge.off')}</span>`;
+    else if (ph === 'lobby' || ph === 'gameover') badge = p.ready ? `<span class="badge ok">${t('badge.ready')}</span>` : `<span class="badge">${t('badge.wait')}</span>`;
+    else if (ph === 'bet') {
+      if (turn) badge = `<span class="badge think dots">${t('ip.thinking')}</span>`;
+      else if (p.lastAction) badge = `<span class="badge ${p.folded ? 'warn' : 'ok'}">${actionLabel(p.lastAction)}</span>`;
+    } else if (hand) {
+      badge = `<span class="badge hand">${hand.folded ? t('ip.fold') : t('ip.value', { n: hand.value })}</span>`;
+      if (hand.penalty) badge += `<span class="badge warn">${t('ip.penalty', { n: hand.penalty })}</span>`;
+    }
+    let delta = '';
+    if (ph === 'showdown' && hand) {
+      const net = (isWinner ? S.result.share : 0) - S.result.ante - hand.bet - hand.penalty;
+      if (net) delta = `<span class="delta ${net > 0 ? 'plus' : 'minus'}">${net > 0 ? '+' : ''}${fmt(net)}</span>`;
+    }
+    const bet = ph === 'bet' && p.bet ? `<div class="is-bet"><span class="chip-stack"><i></i><i></i><i></i></span><b>${fmt(p.bet)}</b></div>` : '';
+    const dealer = S.dealerId === p.id && ph !== 'lobby' && ph !== 'gameover' ? `<span class="dealer-btn" title="${t('ip.dealer')}">D</span>` : '';
+    const botTag = p.bot ? `<span class="bot-tag">BOT·${t(`lvl.${p.bot}`)}</span>` : '';
+    const removeBtn = p.bot && ph === 'lobby' ? `<button class="seat-x" data-act="removeBot" data-id="${p.id}" aria-label="${t('bot.remove')}">×</button>` : '';
+    return `${removeBtn}
+      <div class="is-card">${card}</div>
+      <div class="is-avatar-wrap">
+        <svg class="is-ring" viewBox="0 0 100 100" aria-hidden="true"><circle cx="50" cy="50" r="46"/></svg>
+        <div class="is-avatar avatar${p.connected ? '' : ' off'}" style="background:${colorFor(p.id)}">${avatarInner(p)}</div>
+        ${dealer}
+      </div>
+      <div class="is-plate"><b>${esc(p.name)}${isMe ? `<em>${t('me')}</em>` : ''}</b><span><i class="chip-icon"></i>${fmt(p.chips)} ${delta}</span>${botTag}</div>
+      <div class="is-badges">${badge}</div>
+      ${bet}`;
+  }
+
+  function ipCenterHTML() {
+    const inResult = S.phase === 'showdown' || S.phase === 'gameover';
+    const pot = inResult && S.result ? S.result.pot : S.pot;
+    const status = `<div class="ipc-status"><b id="ipLabel"></b><span id="ipSub"></span></div>`;
+    if (S.phase === 'lobby') {
+      return `${status}<div class="ipc-rules">${t('ip.lobbyRules', { n: S.tenPenalty || 100 })}<br><b>${t('ip.freeRules')}</b></div>`;
+    }
+    const fresh = S.reshuffledAt === S.round && S.phase === 'bet';
+    const discards = (S.discards || []).map((c) => `<span class="mini-v ${c[1] === 'h' ? 'red' : ''}">${ipValue(c)}</span>`).join('');
+    const chips = Math.min(14, Math.ceil((pot || 0) / 60));
+    return `${status}
+      <div class="ipc-pot">
+        <div class="ipc-pile">${Array.from({ length: chips }, (_, i) => `<i style="--i:${i}"></i>`).join('')}</div>
+        <div class="ipc-amount"><span>POT</span><b>${fmt(pot || 0)}</b></div>
+      </div>
+      <div class="ipc-info">
+        <span>${t('ip.toBeat')} <b>${fmt(S.currentBet || 0)}</b></span>
+        <span>${t('ip.deck')} <b>${S.deckLeft ?? '-'}</b>${fresh ? ` <i class="ip-new">${t('ip.reshuffled')}</i>` : ''}</span>
+      </div>
+      <div class="ipc-discards"><em>${t('ip.discards')}</em><div class="mini-row">${discards || `<span class="none">${t('ip.noDiscards')}</span>`}</div></div>`;
+  }
+
+  function indianReason() {
+    const r = S.result;
+    if (!r) return '';
+    const mine = r.hands.find((h) => h.id === S.me);
+    const nameOf = (id) => S.players.find((p) => p.id === id)?.name || '';
+    if (r.uncontested) return r.winners[0] === S.me ? t('ip.whyAllFold') : t('ip.whyOthersWin', { name: nameOf(r.winners[0]) });
+    if (!mine) return '';
+    if (mine.folded) {
+      // The sting of Indian Poker: you folded the winning card.
+      const best = Math.max(...r.hands.filter((h) => !h.folded).map((h) => h.value));
+      return mine.value > best ? t('ip.whyFoldedWin', { n: mine.value }) : t('ip.whyFolded', { n: mine.value });
+    }
+    if (r.winners.length > 1) return t('ip.whyTie', { n: r.hands.find((h) => h.id === r.winners[0]).value });
+    return t('ip.whyMine', { n: mine.value });
+  }
+
+  function renderIndianStatus() {
+    const ph = S.phase;
+    const turnP = S.players.find((p) => p.id === S.turn);
+    const myTurn = ph === 'bet' && S.turn === S.me;
+    const others = S.players.filter((p) => p.id !== S.me);
+    const label = {
+      lobby: others.length ? t('ph.lobbyReady') : t('ph.lobbyWait'),
+      bet: myTurn ? t('ip.yourTurn') : t('ip.turnOf', { name: turnP?.name || '' }),
+      showdown: t('ph.showdown'),
+      gameover: t('ph.gameover'),
+    }[ph] || '';
+    const sub = {
+      lobby: [t('sub.count', { n: S.players.length, max: S.maxPlayers }), t('ip.turnTime', { p: Math.round(S.durations.bet / 1000) })].join(' · '),
+      bet: myTurn && S.toCall ? t('ip.toCall', { n: fmt(S.toCall) }) : t('ip.betHint'),
+      showdown: indianReason(),
+    }[ph] || '';
+    const lab = $('#ipLabel');
+    if (lab) { lab.textContent = label; $('#ipSub').textContent = sub; }
+    showBanner(() => {
+      const mine = S.result.hands.find((h) => h.id === S.me);
+      return mine ? t('ip.myCard', { n: mine.value }) : '';
+    }, indianReason);
+  }
+
+  // Betting panel: fold any time; on your turn check/call or raise any amount.
+  function ipBetActions(me) {
+    if (me.folded) return `<span class="hint">${t('ip.foldedWait')}</span>`;
+    const myTurn = S.turn === S.me;
+    const fold = `<button class="btn ip-fold" data-act="fold">${t('ip.fold')}${myTurn ? '' : `<small>${t('ip.foldAny')}</small>`}</button>`;
+    if (!myTurn) {
+      const turnP = S.players.find((p) => p.id === S.turn);
+      return `<div class="ipa-row">${fold}<span class="hint dots">${t('ip.waitTurn', { name: turnP?.name || '' })}</span></div>`;
+    }
+    const toCall = S.toCall || 0;
+    const call = toCall
+      ? `<button class="btn blue" data-act="call">${t('ip.callBtn', { n: fmt(Math.min(toCall, me.chips)) })}</button>`
+      : `<button class="btn blue" data-act="check">${t('ip.check')}</button>`;
+    const canRaise = S.raises < S.maxRaises && S.cap > S.currentBet && me.chips > toCall;
+    if (!canRaise) return `<div class="ipa-row">${fold}${call}</div>`;
+    const min = Math.min(S.cap, S.currentBet + (S.minRaise || 20));
+    const max = S.cap;
+    const key = `${S.dealId}:${S.currentBet}:${S.turn}`;
+    if (key !== ipRaiseKey) { ipRaiseKey = key; ipRaiseTo = min; }
+    ipRaiseTo = Math.max(min, Math.min(max, ipRaiseTo));
+    const r10 = (n) => Math.max(min, Math.min(max, Math.round(n / 10) * 10));
+    const quick = [
+      [t('ipq.min'), min], [t('ipq.half'), r10(S.currentBet + S.pot / 2)], [t('ipq.pot'), r10(S.currentBet + S.pot)], [t('ip.allin'), max],
+    ].map(([l, v]) => `<button class="ipq" data-act="ipQuick" data-to="${v}">${l}</button>`).join('');
+    return `<div class="ipa-row">${fold}${call}
+      <div class="ipa-raise">
+        <div class="ipa-quick">${quick}</div>
+        <div class="ipa-slide"><input type="range" id="ipSlider" min="${min}" max="${max}" step="10" value="${ipRaiseTo}" aria-label="${t('ipq.amount')}" /></div>
+      </div>
+      <button class="btn gold big ipa-go" data-act="raiseTo">${t('ipq.raise')} <b id="ipRaiseVal"></b></button></div>`;
+  }
+  function ipRaiseLabel() {
+    const el = $('#ipRaiseVal');
+    if (el) el.textContent = ipRaiseTo >= S.cap ? `${fmt(ipRaiseTo)} · ${t('ip.allin')}` : fmt(ipRaiseTo);
+  }
+
+  // Chips fly from a seat into the middle whenever someone puts money in.
+  function ipChipFly() {
+    if (S.phase !== 'bet' || !P || P.dealId !== S.dealId) return;
+    const center = $('#ipCenter');
+    if (!center) return;
+    const b = center.getBoundingClientRect();
+    for (const p of S.players) {
+      const before = P.players.find((q) => q.id === p.id);
+      if (!before || p.bet <= before.bet) continue;
+      const seat = document.querySelector(`.iseat[data-id="${p.id}"] .is-avatar-wrap`);
+      if (!seat) continue;
+      const a = seat.getBoundingClientRect();
+      for (let k = 0; k < 4; k++) {
+        const c = document.createElement('i');
+        c.className = 'chip-fly';
+        c.style.left = `${a.left + a.width / 2}px`;
+        c.style.top = `${a.top + a.height / 2}px`;
+        document.body.appendChild(c);
+        reflow(c);
+        c.style.transitionDelay = `${k * 70}ms`;
+        c.style.transform = `translate(${b.left + b.width / 2 - a.left - a.width / 2 + (k - 1.5) * 8}px, ${b.top + b.height / 2 - a.top - a.height / 2}px)`;
+        setTimeout(() => c.remove(), 1000);
+      }
+    }
+  }
+
+
   // ---------------------------------------------------------- winner spotlight
   // Once per showdown: a full-screen moment naming who won and with what.
   const CROWN = '<svg viewBox="0 0 64 44" aria-hidden="true"><defs><linearGradient id="spG" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#fff2b8"/><stop offset=".5" stop-color="#f5c451"/><stop offset="1" stop-color="#a06c17"/></linearGradient></defs><path d="M4 14l14 10L32 4l14 20 14-10-6 26H10z" fill="url(#spG)" stroke="#6b450c" stroke-width="2" stroke-linejoin="round"/><circle cx="32" cy="4" r="4" fill="#e3283a"/><circle cx="4" cy="14" r="3.5" fill="#2f7bff"/><circle cx="60" cy="14" r="3.5" fill="#2f7bff"/></svg>';
@@ -707,7 +996,7 @@
     if (ph === 'showdown' && P?.phase !== 'showdown' && S.result && !S.result.voided) {
       clearTimeout(bannerTimer);
       // Let the table reveal play first, then take the stage.
-      const delay = S.game === 'nut' ? 500 : 1300;
+      const delay = S.game === 'indian' ? 1500 : S.game === 'nut' ? 500 : 1300;
       const d = detail();
       const why = reason();
       bannerTimer = setTimeout(() => openSpotlight(d, why), delay);
@@ -725,11 +1014,14 @@
     const iWon = r.winners.includes(S.me);
     const split = winners.length > 1;
     const wHand = r.hands.find((h) => h.id === r.winners[0]);
-    const handName = r.uncontested ? t('sp.allFold') : I18N.hand(wHand.score);
+    const indian = S.game === 'indian';
+    const handName = r.uncontested ? t('sp.allFold') : indian ? t('sp.indianWin', { n: wHand.value }) : I18N.hand(wHand.score);
     const title = split ? t('sp.split') : iWon ? t('sp.youWin') : t('sp.wins', { name: winners[0].name });
 
     let cards = '';
-    if (!r.uncontested) {
+    if (indian && !r.uncontested) {
+      cards = winners.map((w, i) => cardHTML(r.hands.find((h) => h.id === w.id).card, '', { cls: 'sp-card big', style: `--i:${i}` })).join('');
+    } else if (!r.uncontested) {
       const own = new Set(wHand.cards);
       cards = wHand.best.map((c, i) => cardHTML(c, '', { cls: `sp-card${own.has(c) ? ' own' : ''}`, style: `--i:${i}` })).join('');
     }
@@ -857,7 +1149,7 @@
   }
 
   function renderActions({ me, opp }) {
-    const bar = $('#actionBar');
+    const bar = S.game === 'indian' ? $('#ipActions') : $('#actionBar');
     if (!me) return setHTML(bar, spectatorActions());
     const ph = S.phase;
     let html = '';
@@ -875,7 +1167,7 @@
           <button class="btn ${me.ready ? 'ghost' : 'gold'} big" data-act="ready" ${opp ? '' : 'disabled'}>${me.ready ? t('act.unready') : t('act.ready')}</button>
         </div>${bots}`;
     } else if (ph === 'bet') {
-      html = betActions(me);
+      html = S.game === 'indian' ? ipBetActions(me) : betActions(me);
     } else if (ph === 'memorize') {
       html = me.memorized
         ? `<span class="hint dots">${t('hint.oppMemorizing')}</span>`
@@ -894,6 +1186,7 @@
         : `<button class="btn blue" data-act="next">${last ? t('act.final') : t('act.nextRound')}</button>`;
     }
     setHTML(bar, html);
+    if (S.game === 'indian' && ph === 'bet') ipRaiseLabel();
   }
 
   // Watching: take a seat when one opens (mid-game seats play from the next round).
@@ -973,6 +1266,11 @@
       // Chip sound whenever someone puts money in.
       if (P?.phase === 'bet' && P?.dealId === S.dealId && S.pot > P.pot) SFX.chips();
     }
+    if (S.game === 'indian') {
+      if (S.phase === 'bet' && P?.dealId !== S.dealId) { SFX.shuffle(); SFX.deal(); }
+      if (S.phase === 'gameover' && P?.phase !== 'gameover' && S.final?.championId === S.me) SFX.fanfare();
+      return;
+    }
     if (P?.phase === S.phase && P?.dealId === S.dealId) return;
     switch (S.phase) {
       case 'memorize':
@@ -1020,6 +1318,8 @@
     const sec = Math.ceil(left / 1000);
     timerEl.classList.remove('hidden');
     timerNum.textContent = sec;
+    const ring = S.game === 'indian' && document.querySelector('.iseat.turn .is-ring circle');
+    if (ring) ring.style.strokeDashoffset = String(289 * (1 - left / total));
     timerBar.style.strokeDashoffset = String(CIRC * (1 - left / total));
     const urgent = (S.phase === 'memorize' || S.phase === 'pick' || (S.phase === 'bet' && S.turn === S.me)) && sec <= 5;
     timerEl.classList.toggle('urgent', urgent);

@@ -175,6 +175,70 @@ const Tutorial = (() => {
       },
     },
     {
+      games: ['indian'],
+      title: { ko: '내 카드만 안 보여요', en: "You can't see your own card" },
+      text: {
+        ko: '모두 카드 1장을 이마에 붙여요. <b>다른 사람 카드는 다 보이지만 내 카드는 "?"</b>로만 보입니다. 카드는 <b>1~10 두 벌(20장)</b>이고, 숫자가 가장 높은 사람이 이겨요.',
+        en: 'Everyone wears one card on their forehead. <b>You see everyone else\'s card, but yours shows as "?"</b>. The deck is <b>two sets of 1–10 (20 cards)</b>, and the highest number wins.',
+      },
+      html: () => `<div class="tut-felt tut-ip">
+          <div class="tut-ip-seat">${card('7s')}<span>Leo</span></div>
+          <div class="tut-ip-seat">${card('Th')}<span>Mia</span></div>
+          <div class="tut-ip-seat me">${card(null, { down: true, cls: 'mine-hidden' }).replace('<span class="letter"></span>', '<span class="letter">?</span>')}<span>${t('me')}</span></div>
+        </div>`,
+      play() {
+        stageCards('.tut-ip-seat .card').forEach((c, i) => { c.classList.add('deal-in'); c.style.setProperty('--dd', `${i * 160}ms`); });
+        window.SFX && SFX.deal();
+      },
+    },
+    {
+      games: ['indian'],
+      title: { ko: '베팅으로 추리하기', en: 'Read the bets' },
+      text: {
+        ko: '내 차례에 <b>체크 / 콜 / 레이즈</b>를 골라요. 레이즈는 <b>슬라이더로 원하는 만큼</b>(최소·½팟·팟·올인 바로가기), <b>다이는 내 차례가 아니어도 언제든지</b> 할 수 있어요. Mia의 10이 보이면 나는 이기기 어렵겠죠? 반대로 <b>남들이 자신 있게 레이즈하면, 내 카드가 낮다는 뜻</b>일 수 있어요. 블러핑도 전략!',
+        en: 'On your turn <b>Check / Call / Raise</b>. Raise <b>any amount with the slider</b> (Min, ½ pot, Pot, All-in shortcuts), and <b>fold any time, even when it isn\'t your turn</b>. If you see Mia\'s 10, you\'re unlikely to win. And if <b>others raise confidently, your card is probably low</b>. Bluffing is part of the game!',
+      },
+      html: () => `<div class="tut-felt tut-ip">
+          <div class="tut-ip-seat">${card('7s')}<span>Leo · ${t('ip.check')}</span></div>
+          <div class="tut-ip-seat">${card('Th')}<span>Mia · <b class="tut-raise">${t('ip.raiseTo', { n: 70 })}</b></span></div>
+          <div class="tut-ip-seat me">${card(null, { down: true, cls: 'mine-hidden' }).replace('<span class="letter"></span>', '<span class="letter">?</span>')}<span>${t('me')}</span></div>
+          <div class="tut-ip-btns"><span class="b fold">${t('ip.fold')}</span><span class="b">${t('ip.callBtn', { n: 50 })}</span><span class="b gold">+50</span><span class="b gold">+100</span></div>
+        </div>`,
+      play() {
+        later(700, () => { stage.querySelector('.tut-raise').classList.add('pulse'); window.SFX && SFX.chips(); });
+      },
+    },
+    {
+      games: ['indian'],
+      title: { ko: '쇼다운과 10 벌칙', en: 'Showdown and the 10 penalty' },
+      text: {
+        ko: '베팅이 끝나면 모든 카드를 공개해요. <b>가장 높은 숫자가 팟을 가져가고, 같으면 나눠요.</b> 단, <b>10을 들고 다이하면 벌칙 100칩</b>을 내야 해요. 남이 다 이길 것처럼 굴어도, 내 카드가 10일 수 있다는 걸 잊지 마세요!',
+        en: 'When betting ends, all cards are revealed. <b>The highest number takes the pot; ties split.</b> But <b>folding while holding a 10 costs a 100-chip penalty</b>. Even when others act like winners, your card might be a 10!',
+      },
+      html: () => `<div class="tut-felt tut-ip">
+          <div class="tut-ip-seat">${card('7s', { cls: 'dim' })}<span>Leo</span></div>
+          <div class="tut-ip-seat">${card('Th', { cls: 'hl' })}<span>Mia · WIN</span></div>
+          <div class="tut-ip-seat me">${card('4h', { down: true })}<span>${t('me')}</span></div>
+          <div class="tut-badge">${L({ ko: 'Mia 승리! (10)', en: 'Mia wins with a 10!' })}</div>
+        </div>`,
+      play() {
+        const mine = stage.querySelector('.tut-ip-seat.me .card');
+        later(600, () => { mine.classList.remove('down'); window.SFX && SFX.flip(0); });
+        later(1200, () => { stage.querySelector('.tut-badge').classList.add('show'); });
+      },
+    },
+    {
+      games: ['indian'],
+      title: { ko: '지나간 카드를 세어 보세요', en: 'Count the past cards' },
+      text: {
+        ko: '덱은 다 떨어질 때까지 다시 섞지 않아요. 테이블 가운데 <b>"지나간 카드"</b>에 이미 나온 숫자가 표시되니, <b>남은 카드를 세면 내 카드를 더 잘 추리</b>할 수 있어요. 시작 칩 1,000, 참가비 20부터 3라운드마다 올라가요(20→40→60→100). 12라운드 후 칩이 많은 사람이 승리!',
+        en: 'The deck isn\'t reshuffled until it runs out. <b>"Past cards"</b> in the middle of the table shows numbers already used, so <b>counting what\'s left helps you guess your card</b>. Start with 1,000 chips; the ante climbs every 3 rounds (20→40→60→100). Most chips after 12 rounds wins!',
+      },
+      html: () => `<div class="tut-felt"><div class="ip-discards"><em>${t('ip.discards')}</em><div class="mini-row">${['T','T','9','8','8','5','3','1'].map((v, i) => `<span class="mini-v ${i % 2 ? 'red' : ''}">${v === 'T' ? 10 : v}</span>`).join('')}</div></div>
+          <div class="tut-badge show" style="font-size:1.1rem">${L({ ko: '10이 벌써 2장 다 나왔다 → 내 카드는 10이 아니다!', en: 'Both 10s are gone → my card isn\'t a 10!' })}</div></div>`,
+      play() {},
+    },
+    {
       games: ['memory', 'nut'],
       title: { ko: '베팅 라운드', en: 'The betting round' },
       text: {

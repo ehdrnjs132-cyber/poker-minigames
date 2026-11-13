@@ -116,11 +116,11 @@ const Chat = (() => {
   // Speech bubble that pops from the sender's seat.
   function showBubble(m) {
     if (m.sid) return plazaBubble(m);
-    const seat = document.querySelector(`.seat[data-id="${m.playerId}"]`);
+    const seat = document.querySelector(`.seat[data-id="${m.playerId}"], .iseat[data-id="${m.playerId}"]`);
     if (!seat || !document.getElementById('room').classList.contains('active')) return;
     const r = seat.getBoundingClientRect();
     const b = document.createElement('div');
-    const top = seat.id !== 'seatMe';
+    const top = seat.id !== 'seatMe' && !seat.classList.contains('me');
     // One bubble per seat: a new message replaces the previous one.
     document.querySelectorAll(`.seat-bubble[data-seat="${m.playerId}"]`).forEach((old) => old.remove());
     b.dataset.seat = m.playerId;
