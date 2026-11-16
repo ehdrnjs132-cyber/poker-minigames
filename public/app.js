@@ -240,6 +240,10 @@
   $('#setupCreate').addEventListener('click', () => {
     const name = getName();
     if (!name) return closeSetup();
+    // No headcount or betting-round options any more: rooms take as many as
+    // the game allows (start whenever everyone seated is ready), betting is on.
+    settings.players = 6;
+    settings.betting = 'on';
     pref.set('roomSettings', JSON.stringify(settings));
     SFX.click();
     closeSetup();
@@ -463,7 +467,7 @@
     if (a === 'dualSide') {
       dualSide = b.dataset.side;
       SFX.select();
-      if (dualSide !== 'both') return dualPeek(dualSide === 'back');
+      if (dualSide !== 'both') dualPeek(dualSide === 'back', true);
       return render();
     }
     if (a === 'dualStep') { dualTo = b.dataset.to !== undefined ? Number(b.dataset.to) : dualTo + Number(b.dataset.d); SFX.click(); return render(); }
@@ -981,7 +985,7 @@
         ${dealer}
       </div>
       <div class="is-plate"><b>${esc(p.name)}${isMe ? `<em>${t('me')}</em>` : ''}</b><span><i class="chip-icon"></i>${fmt(p.chips)} ${delta}</span>${botTag}</div>
-      <div class="is-badges">${badge0}${badge}</div>
+      <div class="is-badges">${badge}</div>
       ${bet}`;
   }
 
@@ -1276,7 +1280,7 @@
     rib.textContent = p.side ? `${dualSideName(p.side)} BET` : '';
     rib.className = `fl-rib${p.side ? ` on s-${p.side}` : ''}`;
   }
-  function dualPeek(force) {
+  function dualPeek(force, quiet) {
     const me = S?.players.find((p) => p.id === S.me);
     if (!me || S.phase !== 'bet' || !me.hasCard) return;
     const cur = dualPeekLocal !== null ? dualPeekLocal : !!me.peek;
@@ -1284,7 +1288,7 @@
     if (next === cur) return;
     dualPeekLocal = next;
     act('peek', { on: next });
-    render();
+    if (!quiet) render();
   }
   function dualCenterHTML() {
     const status = `<div class="ipc-status"><b id="dLabel"></b><span id="dSub"></span></div>`;
@@ -1485,7 +1489,7 @@
           ${target ? `<span class="throw-here">${t('bomb.throwHere')}</span>` : ''}
         </div>
         <div class="is-plate"><b>${esc(p.name)}${isMe ? `<em>${t('me')}</em>` : ''}</b><span class="hearts">${hearts}</span>${botTag}</div>
-        <div class="is-badges">${badge0}${badge}</div>`);
+        <div class="is-badges">${badge}</div>`);
     });
     [...box.children].forEach((el) => !wanted.has(el.dataset.id) && el.remove());
 
@@ -1663,7 +1667,7 @@
           <span class="nose${twitch}" style="--len:${14 + p.nose * 13}px"><i></i></span>
         </div>
         <div class="is-plate"><b>${esc(p.name)}${isMe ? `<em>${t('me')}</em>` : ''}</b><span>🚨 ${p.nose} · 🃏 ${p.cards}</span>${botTag}</div>
-        <div class="is-badges">${badge0}${badge}</div>`);
+        <div class="is-badges">${badge}</div>`);
     });
     [...box.children].forEach((el) => !wanted.has(el.dataset.id) && el.remove());
 
