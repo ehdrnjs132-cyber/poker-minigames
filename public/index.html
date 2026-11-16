@@ -7,9 +7,9 @@
   <meta name="description" content="친구들과 함께하는 포커 룰 미니게임" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link href="https://fonts.googleapis.com/css2?family=Black+Han+Sans&family=Jua&family=Fredoka:wght@500;600;700&family=Gaegu:wght@700&family=Noto+Sans+KR:wght@400;500;700;900&family=Oswald:wght@500;600;700&display=swap" rel="stylesheet" />
+  <link href="https://fonts.googleapis.com/css2?family=Black+Han+Sans&family=Cinzel:wght@600;700;900&family=Playfair+Display:wght@700;900&family=Gowun+Batang:wght@700&family=Noto+Sans+KR:wght@400;500;700;900&family=Oswald:wght@500;600;700&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="style.css" />
-  <link rel="stylesheet" href="theme-cat.css" />
+  <link rel="stylesheet" href="theme-casino.css" />
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Cpath fill='%23f5c451' d='M32 4C22 18 8 24 8 38c0 8 6 13 13 13 4 0 7-2 9-4-1 5-3 9-6 13h16c-3-4-5-8-6-13 2 2 5 4 9 4 7 0 13-5 13-13C56 24 42 18 32 4z'/%3E%3C/svg%3E" />
 </head>
 <body>
@@ -69,7 +69,7 @@
       <button id="inviteJoin" class="btn gold" data-i18n="invite.enter">입장하기</button>
     </div>
 
-    <div id="plaza" class="plaza" aria-label="Lobby plaza"></div>
+    <div id="lobbyHome" class="lobby-home"></div>
   </main>
 
   <!-- ===== SETTINGS ===== -->
@@ -256,8 +256,8 @@
         <button data-g="memory" data-i18n="game.memory">기억 포커</button>
         <button data-g="nut" data-i18n="game.nut">너트 레이스</button>
         <button data-g="indian" data-i18n="game.indian">인디언 포커</button>
-        <button data-g="bomb" data-i18n="game.bomb">고양이 폭탄 파티</button>
-        <button data-g="liar" data-i18n="game.liar">피노키오 거짓말 카드</button>
+        <button data-g="bomb" data-i18n="game.bomb">폭탄 돌리기</button>
+        <button data-g="liar" data-i18n="game.liar">거짓말 카드</button>
       </div>
       <div class="rank-list" id="rankList"></div>
       <div class="rank-me" id="rankMe"></div>
@@ -330,9 +330,8 @@
   <script src="chat.js"></script>
   <script src="tutorial.js"></script>
   <script src="profile.js"></script>
-  <script src="plaza.js"></script>
+  <script src="lobby.js"></script>
   <script src="taunts.js"></script>
-  <script src="roam.js"></script>
   <script src="google.js"></script>
 </body>
 </html>

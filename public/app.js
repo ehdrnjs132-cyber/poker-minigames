@@ -41,7 +41,8 @@
     return AVATAR_COLORS[h % AVATAR_COLORS.length];
   }
   const botFace = () =>
-    '<svg viewBox="0 0 24 24" width="60%" height="60%" aria-hidden="true"><rect x="4" y="7" width="16" height="12" rx="4" fill="#fff"/><circle cx="9" cy="13" r="1.8" fill="#1b2a5c"/><circle cx="15" cy="13" r="1.8" fill="#1b2a5c"/><path d="M12 7V4" stroke="#fff" stroke-width="2" stroke-linecap="round"/><circle cx="12" cy="3.5" r="1.6" fill="#fff"/></svg>';
+    // dealer chip with "AI" (no character faces)
+    '<svg viewBox="0 0 100 100" width="100%" height="100%" aria-hidden="true"><rect width="100" height="100" fill="#14181f"/><circle cx="50" cy="50" r="40" fill="#1d232c" stroke="#d9b45a" stroke-width="3"/><circle cx="50" cy="50" r="28" fill="none" stroke="#d9b45a" stroke-width="2" stroke-dasharray="3 4"/><text x="50" y="61" text-anchor="middle" font-family="Cinzel, Georgia, serif" font-weight="900" font-size="30" fill="#f6dc8e">AI</text></svg>';
   // Profile picture inside an .avatar circle: bot face, uploaded photo, preset cat, or initial.
   function avatarInner(p) {
     if (!p) return '?';
@@ -1089,36 +1090,30 @@
 
 
 
-  // ============================================================ Cat Bomb Party
+  // ============================================================ Bomb Pass
   // Party mat with seats around it; a cat-shaped bomb sits on the holder and
   // flies to whoever they tap. Its face gets more scared as the fuse burns.
   let bombBoomKey = null;
   let bombTickAt = 0;
 
+  // Classic black bomb: the fuse gets shorter and the glow hotter as danger rises.
   function catBombSVG(danger) {
-    const faces = [
-      // 0: happy ^ ^
-      '<path d="M37 64q4-5 8 0M55 64q4-5 8 0" fill="none" stroke="#fff" stroke-width="3" stroke-linecap="round"/><path d="M45 74q5 4 10 0" fill="none" stroke="#fff" stroke-width="2.6" stroke-linecap="round"/>',
-      // 1: alert o o
-      '<circle cx="41" cy="64" r="4.2" fill="#fff"/><circle cx="59" cy="64" r="4.2" fill="#fff"/><circle cx="41" cy="65" r="2" fill="#1b1b2b"/><circle cx="59" cy="65" r="2" fill="#1b1b2b"/><path d="M46 75h8" stroke="#fff" stroke-width="2.6" stroke-linecap="round"/>',
-      // 2: scared O O + sweat
-      '<circle cx="41" cy="63" r="6" fill="#fff"/><circle cx="59" cy="63" r="6" fill="#fff"/><circle cx="41" cy="64" r="2.4" fill="#1b1b2b"/><circle cx="59" cy="64" r="2.4" fill="#1b1b2b"/><ellipse cx="50" cy="76" rx="4" ry="3.4" fill="#fff"/><path d="M70 50q4 6 0 9q-4-3 0-9z" fill="#7fd4ff"/>',
-      // 3: panic > <
-      '<path d="M35 58l10 6-10 6M65 58l-10 6 10 6" fill="none" stroke="#fff" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"/><path d="M42 78q8-9 16 0z" fill="#fff"/><path d="M70 48q4 6 0 9q-4-3 0-9zM27 50q4 6 0 9q-4-3 0-9z" fill="#7fd4ff"/>',
-    ];
-    return `<svg class="cat-bomb d${danger}" viewBox="0 0 100 104" aria-hidden="true">
-      <path class="cb-fuse" d="M58 26q8-14 20-12" fill="none" stroke="#c9a26b" stroke-width="4" stroke-linecap="round"/>
-      <g class="cb-spark"><circle cx="79" cy="13" r="6" fill="#ffd34d"/><circle cx="79" cy="13" r="3" fill="#fff"/></g>
-      <path d="M24 44L28 18 44 34Z M76 44L72 18 56 34Z" fill="#2b2b3d" stroke="#14141f" stroke-width="2" stroke-linejoin="round"/>
-      <path d="M29 36l2-11 7 7z M71 36l-2-11-7 7z" fill="#ff9fb1"/>
-      <circle cx="50" cy="64" r="34" fill="#2b2b3d" stroke="#14141f" stroke-width="2.5"/>
-      <ellipse cx="38" cy="50" rx="9" ry="6" fill="rgba(255,255,255,.18)" transform="rotate(-25 38 50)"/>
-      <rect x="44" y="27" width="12" height="9" rx="2" fill="#5a5a72"/>
-      <ellipse cx="31" cy="73" rx="5" ry="3" fill="#ff7b9c" opacity=".55"/><ellipse cx="69" cy="73" rx="5" ry="3" fill="#ff7b9c" opacity=".55"/>
-      ${faces[Math.max(0, Math.min(3, danger || 0))]}
+    const d = Math.max(0, Math.min(3, danger || 0));
+    const fuse = ['M58 30q10-18 26-14', 'M58 30q8-12 18-11', 'M58 30q5-7 11-7', 'M58 30q2-3 5-3'][d];
+    const tip = [[84, 16], [76, 19], [69, 23], [63, 27]][d];
+    const glow = ['rgba(255,190,80,0)', 'rgba(255,170,60,.25)', 'rgba(255,110,40,.45)', 'rgba(255,40,30,.7)'][d];
+    return `<svg class="cat-bomb d${d}" viewBox="0 0 100 104" aria-hidden="true">
+      <circle cx="48" cy="64" r="44" fill="${glow}"/>
+      <path class="cb-fuse" d="${fuse}" fill="none" stroke="#c9a26b" stroke-width="4" stroke-linecap="round"/>
+      <g class="cb-spark"><circle cx="${tip[0]}" cy="${tip[1]}" r="7" fill="#ffd34d"/><circle cx="${tip[0]}" cy="${tip[1]}" r="3.2" fill="#fff"/></g>
+      <rect x="40" y="25" width="17" height="12" rx="2.5" fill="url(#bGold)" transform="rotate(30 48 31)"/>
+      <defs><linearGradient id="bGold" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#fff2c2"/><stop offset=".5" stop-color="#e6b54a"/><stop offset="1" stop-color="#8a5a12"/></linearGradient>
+      <radialGradient id="bBody" cx=".35" cy=".3" r=".8"><stop offset="0" stop-color="#4a4a58"/><stop offset=".55" stop-color="#1c1c24"/><stop offset="1" stop-color="#08080c"/></radialGradient></defs>
+      <circle cx="46" cy="66" r="33" fill="url(#bBody)" stroke="url(#bGold)" stroke-width="2.5"/>
+      <ellipse cx="34" cy="52" rx="10" ry="6" fill="rgba(255,255,255,.22)" transform="rotate(-30 34 52)"/>
+      ${d >= 2 ? `<text x="46" y="77" text-anchor="middle" font-family="Cinzel,Georgia,serif" font-weight="900" font-size="${d === 3 ? 30 : 24}" fill="${d === 3 ? '#ff5a4a' : '#ffb347'}">!</text>` : ''}
     </svg>`;
   }
-
   function bombBuild() {
     const box = $('#bombTable');
     if (box._built) return;
@@ -1126,7 +1121,7 @@
     box.innerHTML = `
       <div class="ip-oval bomb-oval" id="bOval">
         <div class="ip-rail bomb-rail"></div>
-        <div class="ip-felt bomb-mat"><div class="ip-logo">CAT BOMB PARTY</div></div>
+        <div class="ip-felt bomb-mat"><div class="ip-logo">BOMB PASS</div></div>
         <div class="ip-center bomb-center" id="bCenter"></div>
         <div class="ip-seats" id="bSeats"></div>
         <div class="bomb-token" id="bToken"></div>
@@ -1284,7 +1279,7 @@
 
 
   // ============================================================ Pinocchio Liar's Cards
-  // A wooden workshop table; every character wears a Pinocchio nose that grows
+  // A velvet table; every seat has a lie meter (bar) that grows
   // each time they're caught lying, and twitches whenever they play.
   const liarSel = new Set();
   let liarSelKey = '';
@@ -1298,7 +1293,7 @@
     box.innerHTML = `
       <div class="ip-oval liar-oval" id="lOval">
         <div class="ip-rail liar-rail"></div>
-        <div class="ip-felt liar-felt"><div class="ip-logo">PINOCCHIO</div></div>
+        <div class="ip-felt liar-felt"><div class="ip-logo">LIAR&#39;S CARDS</div></div>
         <div class="ip-center liar-center" id="lCenter"></div>
         <div class="ip-seats" id="lSeats"></div>
       </div>
@@ -1372,7 +1367,7 @@
           <div class="is-avatar avatar${p.connected ? '' : ' off'}" style="background:${colorFor(p.id)}">${avatarInner(p)}</div>
           <span class="nose${twitch}" style="--len:${14 + p.nose * 13}px"><i></i></span>
         </div>
-        <div class="is-plate"><b>${esc(p.name)}${isMe ? `<em>${t('me')}</em>` : ''}</b><span>🤥 ${p.nose} · 🃏 ${p.cards}</span>${botTag}</div>
+        <div class="is-plate"><b>${esc(p.name)}${isMe ? `<em>${t('me')}</em>` : ''}</b><span>🚨 ${p.nose} · 🃏 ${p.cards}</span>${botTag}</div>
         <div class="is-badges">${badge}</div>`);
     });
     [...box.children].forEach((el) => !wanted.has(el.dataset.id) && el.remove());
@@ -1432,7 +1427,7 @@
     if (myTurn) {
       ctrl = `<button class="btn gold big l-play" data-act="liarPlay" ${liarSel.size ? '' : 'disabled'}>${liarSel.size ? t('liar.playBtn', { n: liarSel.size, r: rankName(S.target) }) : t('liar.pickCards', { n: S.maxPlay || 3 })}</button>`;
     } else if (canCall) {
-      ctrl = `<button class="btn l-call" data-act="call">🤥 ${t('liar.callBtn')}</button>`;
+      ctrl = `<button class="btn l-call" data-act="call">🚨 ${t('liar.callBtn')}</button>`;
     } else if (ph === 'window') {
       ctrl = `<span class="hint dots">${t('liar.waitCall')}</span>`;
     } else if (ph === 'reveal') {

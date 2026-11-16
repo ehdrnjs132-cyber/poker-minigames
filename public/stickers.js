@@ -1,4 +1,4 @@
-﻿// Original "mochi cat" sticker set drawn as inline SVG (no image files).
+// Original "mochi cat" sticker set drawn as inline SVG (no image files).
 // Soft white cat with pink ears/blush + handwritten Korean captions.
 const Stickers = (() => {
   const INK = '#4a3b3b';
@@ -96,20 +96,23 @@ const Stickers = (() => {
       ${s.svg()}${txt(60, 20, label, 19, INK)}</svg>`;
   }
 
-  // Profile picture presets: the same cat in different colours and moods.
+  // Profile picture presets: casino chip emblems (suits, royals, crown…).
   const AVATARS = [
-    { bg: '#ffd6e0', eyes: 'dot' }, { bg: '#c9e7ff', eyes: 'happy' }, { bg: '#fff1b8', eyes: 'big' },
-    { bg: '#d8f5e3', eyes: 'heart' }, { bg: '#e6dcff', eyes: 'squint', mouth: 'open' }, { bg: '#ffe0c2', eyes: 'sleep' },
-    { bg: '#b9c3d9', eyes: 'dot', fill: '#a19ca8', ink: '#3b3540' }, { bg: '#ffd1a8', eyes: 'happy', fill: '#ffb36b' },
-    { bg: '#3a4a7a', eyes: 'big', fill: '#4a4458', ink: '#1e1a26' }, { bg: '#fbe3ff', eyes: 'shock', mouth: 'o' },
-    { bg: '#cfeee9', eyes: 'angry', mouth: 'small', fill: '#f5ead8' }, { bg: '#ffeaa0', eyes: 'happy', mouth: 'open', fill: '#ffcf70' },
+    { bg: '#0f5a3a', sym: '♠' }, { bg: '#7a0f22', sym: '♥' }, { bg: '#13285c', sym: '♦' }, { bg: '#16161c', sym: '♣' },
+    { bg: '#5a1048', sym: '♛' }, { bg: '#0f5a3a', sym: 'A' }, { bg: '#7a0f22', sym: 'K' }, { bg: '#13285c', sym: 'Q' },
+    { bg: '#16161c', sym: 'J' }, { bg: '#6a4a10', sym: '7' }, { bg: '#0e4a5a', sym: '★' }, { bg: '#3a1a6a', sym: '♚' },
   ];
   function avatar(id) {
     const a = AVATARS[Number(String(id).slice(1))] || AVATARS[0];
-    return `<svg class="avatar-svg" viewBox="14 24 92 92" aria-hidden="true"><rect x="14" y="24" width="92" height="92" fill="${a.bg}"/>
-      ${cat({ eyes: a.eyes, mouth: a.mouth, fill: a.fill, ink: a.ink, pose: 'head', t: 'translate(0 8)' })}</svg>`;
+    const notches = Array.from({ length: 8 }, (_, i) => `<rect x="56" y="16" width="8" height="12" rx="1.5" fill="#f3e6c4" transform="rotate(${i * 45} 60 60)"/>`).join('');
+    const letter = /^[A-Z0-9]$/.test(a.sym);
+    return `<svg class="avatar-svg" viewBox="10 10 100 100" aria-hidden="true">
+      <rect x="10" y="10" width="100" height="100" fill="${a.bg}"/>
+      <circle cx="60" cy="60" r="44" fill="${a.bg}" stroke="#d9b45a" stroke-width="3"/>${notches}
+      <circle cx="60" cy="60" r="30" fill="none" stroke="#d9b45a" stroke-width="2" stroke-dasharray="3 4"/>
+      <text x="60" y="${letter ? 73 : 76}" text-anchor="middle" font-family="${letter ? "Cinzel, 'Playfair Display', Georgia, serif" : 'Georgia, serif'}" font-weight="900" font-size="${letter ? 38 : 44}" fill="#f6dc8e">${a.sym}</text>
+    </svg>`;
   }
-
   return { list: LIST, svg, avatar, avatarIds: AVATARS.map((_, i) => `p${i}`), has: (id) => !!BY_ID[id], label: (id) => (BY_ID[id] ? labelOf(BY_ID[id]) : '') };
 })();
 

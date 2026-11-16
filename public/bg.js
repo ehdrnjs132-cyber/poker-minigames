@@ -1,4 +1,4 @@
-// Floating blue glow particles behind everything.
+// Floating gold dust behind everything.
 (() => {
   const cv = document.getElementById('bg');
   const g = cv.getContext('2d');
@@ -11,7 +11,7 @@
     h = cv.height = innerHeight * dpr;
     cv.style.width = innerWidth + 'px';
     cv.style.height = innerHeight + 'px';
-    const n = Math.round(Math.min(90, (innerWidth * innerHeight) / 16000));
+    const n = Math.round(Math.min(50, (innerWidth * innerHeight) / 26000));
     parts = Array.from({ length: n }, () => spawn(true));
   }
 
@@ -36,8 +36,8 @@
       if (p.y < -10) Object.assign(p, spawn(false));
       const a = p.a * (0.6 + 0.4 * Math.sin(p.tw));
       g.beginPath();
-      g.fillStyle = `rgba(110,170,255,${a})`;
-      g.shadowColor = 'rgba(60,140,255,.9)';
+      g.fillStyle = `rgba(240,205,120,${a * 0.7})`;
+      g.shadowColor = 'rgba(230,181,74,.8)';
       g.shadowBlur = 8 * dpr;
       g.arc(p.x, p.y, p.r, 0, Math.PI * 2);
       g.fill();

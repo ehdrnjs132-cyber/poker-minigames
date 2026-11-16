@@ -3,8 +3,9 @@ const path = require('path');
 // Local runs pick up Neon's connection settings from .env.local (written by
 // `neon deploy`, never committed). On Render the same values come from the
 // service's Environment settings. Existing env vars are not overridden.
+// NO_ENV_FILE=1 skips it (local testing without touching the real database).
 try {
-  if (typeof process.loadEnvFile === 'function') process.loadEnvFile(path.join(__dirname, '..', '.env.local'));
+  if (!process.env.NO_ENV_FILE && typeof process.loadEnvFile === 'function') process.loadEnvFile(path.join(__dirname, '..', '.env.local'));
 } catch { /* no .env.local: fine */ }
 
 const http = require('http');
@@ -79,7 +80,6 @@ const io = new Server(server);
 
 /** @type {Map<string, any>} */
 const rooms = new Map();
-const Duels = require('./duels')({ io, rooms, members: (room) => members(room) });
 
 // Lobby chat: everyone not seated in a room shares one channel.
 const lobbyChat = [];
@@ -131,7 +131,7 @@ function broadcast(room) {
     if (!p.socketId) return;
     const view = room.game.viewFor(p.id);
     for (const vp of view.players) Object.assign(vp, faces.get(vp.id));
-    io.to(p.socketId).emit('state', { now, code: room.code, gameId: room.gameId, me: p.id, spectator, spectators: watchers, myCoupons: room.coupons?.[p.id] || 0, duel: Duels.duelView(room), ...view });
+    io.to(p.socketId).emit('state', { now, code: room.code, gameId: room.gameId, me: p.id, spectator, spectators: watchers, ...view });
   };
   for (const p of room.players) send(p, false);
   for (const s of room.spectators) send(s, true);
@@ -158,7 +158,6 @@ function scheduleCleanup(room) {
 function destroyRoom(room) {
   clearTimeout(room.cleanupTimer);
   room.game.dispose();
-  Duels.cleanup(room);
   rooms.delete(room.code);
   for (const s of room.spectators) if (s.socketId) io.to(s.socketId).emit('kicked', { code: 'srv.roomClosed' });
   announceRooms();
@@ -225,33 +224,11 @@ function onlineList() {
 let onlineTimer = null;
 function announceOnline() {
   if (onlineTimer) return;
-  plazaDirty = true;
   onlineTimer = setTimeout(() => {
     onlineTimer = null;
     io.to('lobby').emit('online', onlineList());
   }, 400);
 }
-
-// ---- lobby plaza: everyone in the lobby walks around as a character -------
-const PLAZA_W = 480;
-const PLAZA_H = 1960;
-const plaza = new Map(); // socket.id -> { x, y, d, m }
-let plazaDirty = false;
-function plazaList() {
-  const list = [];
-  for (const [sid, pos] of plaza) {
-    const o = online.get(sid);
-    if (!o || !o.uid || o.room) continue;
-    const u = profiles.getUser(o.uid) || {};
-    list.push({ sid, uid: o.uid, name: u.name || 'Player', avatar: u.avatar || null, avatarV: u.avatarV || 0, ...pos });
-  }
-  return list.slice(0, 40);
-}
-setInterval(() => {
-  if (!plazaDirty) return;
-  plazaDirty = false;
-  io.to('lobby').emit('plaza', plazaList());
-}, 100);
 
 // ---- taunts (bluff gestures) ----------------------------------------------
 const TAUNTS = {
@@ -277,7 +254,6 @@ function addBot(room, level) {
 function removeBot(room, id) {
   const bot = room.players.find((p) => p.id === id && p.bot);
   if (!bot || room.game.phase !== 'lobby') return;
-  Duels.onLeave(room, bot.id);
   room.players = room.players.filter((p) => p !== bot);
   room.game.onLeave(bot.id, bot.name);
   postChat(room, { kind: 'system', code: 'sys.left', name: bot.name });
@@ -359,7 +335,6 @@ io.on('connection', (socket) => {
     const spectator = room.spectators.includes(player);
     ctx = { room, player, spectator };
     Object.assign(online.get(socket.id), { room, watching: spectator });
-    plaza.delete(socket.id);
     socket.leave('lobby');
     clearTimeout(room.cleanupTimer);
     socket.emit('chatHistory', room.chat);
@@ -389,7 +364,6 @@ io.on('connection', (socket) => {
     if (!['lobby', 'gameover'].includes(phase) && !room.game.ps.get(player.id)?.out) {
       profiles.recordAbandon(room.gameId, player.userId, room.players.length);
     }
-    Duels.onLeave(room, player.id);
     room.players = room.players.filter((p) => p !== player);
     room.game.onLeave(player.id, player.name);
     if (!room.players.some((p) => !p.bot)) return destroyRoom(room);
@@ -410,8 +384,7 @@ io.on('connection', (socket) => {
       base = { playerId: player.id, name: player.name, spectator: spectator || undefined };
       post = (m) => postChat(room, m);
     } else {
-      // In the lobby: sid lets the plaza pop a bubble over the sender's character.
-      base = { sid: socket.id, name: cleanName(profiles.getUser(uid)?.name) };
+      base = { name: cleanName(profiles.getUser(uid)?.name) };
       post = postLobbyChat;
     }
     if (msg.kind === 'sticker' && /^[a-z0-9]{1,16}$/.test(String(msg.sticker))) {
@@ -511,21 +484,10 @@ io.on('connection', (socket) => {
     }
   });
 
-  Duels.attach(socket, () => ctx);
-
   socket.on('leave', () => detach());
-
-  // Lobby plaza movement (only while standing in the lobby).
-  socket.on('plaza:move', (m) => {
-    if (ctx || !uid || !m || typeof m !== 'object') return;
-    const num = (v, max) => Math.max(0, Math.min(max, Number(v) || 0));
-    plaza.set(socket.id, { x: Math.round(num(m.x, PLAZA_W)), y: Math.round(num(m.y, PLAZA_H)), d: m.d === -1 ? -1 : 1, m: !!m.m });
-    plazaDirty = true;
-  });
 
   socket.on('disconnect', () => {
     online.delete(socket.id);
-    plaza.delete(socket.id);
     announceOnline();
     if (!ctx) return;
     const { room, player, spectator } = ctx;
@@ -536,7 +498,6 @@ io.on('connection', (socket) => {
     }
     player.connected = false;
     player.socketId = null;
-    Duels.onDisconnect(room, player.id);
     room.broadcast();
     scheduleCleanup(room);
   });
