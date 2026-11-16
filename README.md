@@ -74,6 +74,10 @@
 - 서버는 구글이 준 ID 토큰을 Google tokeninfo로 검증하고 구글 계정 고유번호(sub)만 저장합니다. 이메일은 저장하지 않습니다.
 - 켜는 방법: Google Cloud Console → API 및 서비스 → 사용자 인증 정보 → **OAuth 클라이언트 ID(웹 애플리케이션)** 를 만들고, **승인된 JavaScript 원본**에 배포 주소(예: `https://holdem-arcade.onrender.com`)와 `http://localhost:3000`을 넣습니다. 받은 클라이언트 ID를 Render 서비스 **Environment → `GOOGLE_CLIENT_ID`** 에 넣으면 버튼이 나타납니다(값이 없으면 버튼이 숨겨짐).
 
+### 설정 확인: `/status`
+
+배포 주소 뒤에 `/status`를 붙여 열면 `storage`(`postgres`면 기록 영구 저장, `file`이면 재시작 때 사라짐), `dbError`(DB 연결 실패 이유), `googleLogin`(구글 로그인 켜짐 여부)을 볼 수 있습니다. 비밀 값은 보여주지 않습니다. `render.yaml`에 `DATABASE_URL`, `GOOGLE_CLIENT_ID`가 선언돼 있어 Render 대시보드에서 값을 넣으라고 안내합니다.
+
 ### 기록 저장소 (중요)
 
 - 기본값은 `data/store.json` 파일입니다. 로컬에서는 그대로 유지되지만, **Render 무료 웹 서비스는 재시작·재배포 때마다 파일이 지워집니다.**

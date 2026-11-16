@@ -6,3 +6,10 @@ services:
     buildCommand: npm install
     startCommand: npm start
     healthCheckPath: /healthz
+    envVars:
+      # Postgres connection string (Neon / Supabase / Render Postgres). Keeps records across restarts.
+      - key: DATABASE_URL
+        sync: false
+      # Google OAuth web client id (…apps.googleusercontent.com). Turns on Google sign-in.
+      - key: GOOGLE_CLIENT_ID
+        sync: false

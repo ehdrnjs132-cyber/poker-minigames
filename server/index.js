@@ -30,6 +30,17 @@ app.get('/healthz', (_req, res) => res.send('ok'));
 const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID || '';
 app.get('/config.json', (_req, res) => res.json({ googleClientId: GOOGLE_CLIENT_ID || null }));
 
+// Is everything wired up? (no secrets here, just yes/no)
+const startedAt = Date.now();
+app.get('/status', (_req, res) => res.json({
+  storage: store.backend,                 // 'postgres' = records survive restarts, 'file' = they don't on Render
+  records: store.data.size,
+  dbError: store.backend === 'postgres' ? store.lastError : (process.env.DATABASE_URL ? store.lastError || 'fell back to file' : null),
+  googleLogin: !!GOOGLE_CLIENT_ID,
+  rooms: rooms.size,
+  uptimeSec: Math.round((Date.now() - startedAt) / 1000),
+}));
+
 // Check a Google ID token with Google and return its account id (sub).
 async function verifyGoogle(credential) {
   if (!GOOGLE_CLIENT_ID || typeof credential !== 'string' || credential.length > 4096) return null;
@@ -526,6 +537,7 @@ io.on('connection', (socket) => {
 store.init()
   .catch((e) => {
     console.error('Database unavailable, falling back to file storage:', e.message);
+    store.lastError = e.message;
     store.pool = null;
     store.backend = 'file';
   })
