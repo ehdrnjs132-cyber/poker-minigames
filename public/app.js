@@ -514,6 +514,7 @@
       renderActions(ctx);
       renderOverlay(ctx);
       if (S.notice && JSON.stringify(S.notice) !== JSON.stringify(P?.notice)) toast(I18N.msg(S.notice), 3500);
+      fitRoom();
       return;
     }
 
@@ -523,6 +524,7 @@
       renderOverlay(ctx);
       if (S.phase === 'gameover' && P?.phase !== 'gameover' && S.final?.championId === S.me) SFX.fanfare();
       if (S.notice && JSON.stringify(S.notice) !== JSON.stringify(P?.notice)) toast(I18N.msg(S.notice), 3500);
+      fitRoom();
       return;
     }
 
@@ -533,6 +535,7 @@
       phaseEffects(ctx);
       ipChipFly();
       if (S.notice && JSON.stringify(S.notice) !== JSON.stringify(P?.notice)) toast(I18N.msg(S.notice), 3500);
+      fitRoom();
       return;
     }
 
@@ -548,7 +551,40 @@
     phaseEffects(ctx);
 
     if (S.notice && JSON.stringify(S.notice) !== JSON.stringify(P?.notice)) toast(I18N.msg(S.notice), 3500);
+    fitRoom();
   }
+
+  // ---- one screen, no scrolling: shrink the game area to fit the viewport.
+  // The room is exactly one screen tall; whichever game area is showing
+  // (.stage / Indian / bomb / liar table) is scaled down when it's taller.
+  let fitQueued = false;
+  function fitRoom() {
+    if (fitQueued) return;
+    fitQueued = true;
+    setTimeout(() => {
+      fitQueued = false;
+      const room = $('#room');
+      if (!room.classList.contains('active')) return;
+      const areas = ['.stage', '#ipTable', '#bombTable', '#liarTable'].map((s) => room.querySelector(s));
+      const el = areas.find((a) => a && getComputedStyle(a).display !== 'none');
+      if (!el) return;
+      el.style.transform = '';
+      el.style.marginBottom = '';
+      const top = room.querySelector('.topbar').getBoundingClientRect().bottom;
+      // keep the bottom-right round buttons from covering controls on phones
+      const reserve = innerWidth < 600 ? 58 : 8;
+      const avail = innerHeight - top - reserve;
+      const natural = el.scrollHeight;
+      const s = Math.max(0.5, Math.min(1, avail / natural));
+      if (s < 0.995) {
+        el.style.transformOrigin = 'top center';
+        el.style.transform = `scale(${s.toFixed(3)})`;
+        el.style.marginBottom = `${-natural * (1 - s)}px`;
+      }
+    }, 30);
+  }
+  addEventListener('resize', fitRoom);
+  addEventListener('orientationchange', () => setTimeout(fitRoom, 200));
 
   // Opponent seats: one per other player, plus empty seats up to the room size in the lobby.
   function renderOpps(ctx) {

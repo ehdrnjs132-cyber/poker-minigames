@@ -170,3 +170,36 @@ h1, h2, h3, .sp-title, .sp-hand, .ipc-status b, .status-text b, .pad b, .pz-sign
 .is-avatar-wrap::before { left: -10px; }
 .is-avatar-wrap::after { right: -10px; }
 @media (max-aspect-ratio: 4/5) { .is-avatar-wrap::before, .is-avatar-wrap::after { top: -9px; width: 26px; height: 26px; } .is-avatar-wrap::before { left: -8px; } .is-avatar-wrap::after { right: -8px; } }
+
+/* ================= one screen, no scrolling in game rooms ================= */
+#room.screen.active { height: 100vh; height: 100dvh; min-height: 0; overflow: hidden; padding: 6px 8px max(6px, env(safe-area-inset-bottom)); justify-content: flex-start; }
+body:has(#room.active) { overflow: hidden; }
+#room .topbar { flex: none; padding: 2px 0 6px; }
+#room .stage, #room .ip-table { flex: none; }
+#room .ip-table { padding-top: 0; }
+@media (max-width: 600px) {
+  #room .topbar { gap: 6px; }
+  #room .icon-btn { width: 36px; height: 36px; }
+  .code-chip { padding: 6px 10px !important; }
+  .chip-info { padding: 4px 8px !important; }
+  #room .stage { gap: 8px; }
+  .ip-oval { margin-top: 34px !important; }
+  .liar-table .ip-oval { margin-top: 30px !important; }
+}
+/* phones: many opponents -> compact 3-per-row seats so the table stays big */
+@media (max-width: 600px) {
+  #opps.multi { display: grid !important; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 5px; width: 100%; }
+  #opps.multi .seat { flex-direction: column !important; align-items: center !important; justify-content: flex-start; text-align: center; padding: 5px 4px 6px !important; gap: 2px !important; min-height: 0 !important; --hw: 20px; }
+  #opps.multi .seat .avatar { width: 30px !important; height: 30px !important; font-size: .8rem; }
+  #opps.multi .seat .who { display: grid; justify-items: center; gap: 1px; min-width: 0; width: 100%; }
+  #opps.multi .seat .name { font-size: .72rem !important; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  #opps.multi .seat .name em, #opps.multi .seat .bot-tag { display: none; }
+  #opps.multi .seat .chips { font-size: .72rem !important; }
+  #opps.multi .seat .chips .chip-icon { width: 12px; height: 12px; }
+  #opps.multi .seat .badge { font-size: .56rem !important; padding: 1px 6px !important; }
+  #opps.multi .seat .hole { gap: 2px !important; margin: 0 !important; }
+  #opps.multi .seat .hole .card, #opps.multi .seat .hole .slot { width: 20px !important; --w: 20px; }
+  #opps.multi .seat .bet-chip { font-size: .6rem; padding: 1px 5px; }
+  #opps.multi .seat .seat-x { top: 2px; right: 2px; width: 20px; height: 20px; font-size: .8rem; }
+  #opps.multi .seat .dealer-btn { top: 2px; left: 2px; transform: scale(.75); }
+}
