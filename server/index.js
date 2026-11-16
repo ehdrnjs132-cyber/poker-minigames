@@ -35,7 +35,7 @@ const app = express();
 app.use(express.static(path.join(__dirname, '..', 'public')));
 app.get('/healthz', (_req, res) => res.send('ok'));
 // Public client config (Google sign-in shows up only when a client id is set).
-const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID || '';
+const GOOGLE_CLIENT_ID = String(process.env.GOOGLE_CLIENT_ID || '').trim().replace(/^GOOGLE_CLIENT_ID\s*=\s*/i, '').replace(/^(['"])(.*)\1$/, '$2').trim();
 app.get('/config.json', (_req, res) => res.json({ googleClientId: GOOGLE_CLIENT_ID || null }));
 
 // Is everything wired up? (no secrets here, just yes/no)

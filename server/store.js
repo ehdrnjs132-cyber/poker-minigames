@@ -11,6 +11,8 @@ const FILE = process.env.DATA_FILE || path.join(__dirname, '..', 'data', 'store.
 // and &channel_binding=require. We set SSL ourselves, so drop those to avoid
 // driver-version quirks.
 function cleanUrl(u) {
+  // Pasted values often carry the .env quotes or the "DATABASE_URL=" prefix.
+  u = String(u || '').trim().replace(/^DATABASE_URL\s*=\s*/i, '').trim().replace(/^(['"])(.*)\1$/, '$2').trim();
   try {
     const url = new URL(u);
     url.searchParams.delete('sslmode');
