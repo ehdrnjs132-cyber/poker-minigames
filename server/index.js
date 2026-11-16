@@ -1,4 +1,12 @@
 const path = require('path');
+
+// Local runs pick up Neon's connection settings from .env.local (written by
+// `neon deploy`, never committed). On Render the same values come from the
+// service's Environment settings. Existing env vars are not overridden.
+try {
+  if (typeof process.loadEnvFile === 'function') process.loadEnvFile(path.join(__dirname, '..', '.env.local'));
+} catch { /* no .env.local: fine */ }
+
 const http = require('http');
 const crypto = require('crypto');
 const express = require('express');
