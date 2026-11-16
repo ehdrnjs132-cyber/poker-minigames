@@ -44,7 +44,11 @@ const Tutorial = (() => {
     ['High card', 'A', 'Highest single card'],
   ];
 
-  const STEPS = [
+  // Double-sided card for the 양면 포커 steps.
+  const dcard = (front, back, side = null, res = {}) => `<div class="dcard">
+      <div class="dface df-front${side === 'front' || side === 'both' ? ' on' : ''}${res.front ? ` ${res.front}` : ''}"><em>${L({ ko: '앞', en: 'F' })}</em><b>${front}</b></div>
+      <div class="dface df-back${back === '?' ? ' hidden' : ''}${side === 'back' || side === 'both' ? ' on' : ''}${res.back ? ` ${res.back}` : ''}"><em>${L({ ko: '뒤', en: 'B' })}</em><b>${back}</b></div>
+    </div>`;  const STEPS = [
     {
       games: ['memory'],
       title: { ko: "카드 위치를 외우세요", en: "Memorize the card positions" },
@@ -238,7 +242,77 @@ const Tutorial = (() => {
           <div class="tut-badge show" style="font-size:1.1rem">${L({ ko: 'A가 벌써 2장 다 나왔다 → 내 카드는 A가 아니다!', en: 'Both Aces are gone → my card isn\'t an Ace!' })}</div></div>`,
       play() {},
     },
+    // ---------------------------------------------------------------- 양면 포커
     {
+      games: ['dual'],
+      title: { ko: '카드 한 장, 숫자 두 개', en: 'One card, two numbers' },
+      text: {
+        ko: '카드 90장은 <b>앞면과 뒷면에 서로 다른 숫자(1~10)</b>가 적혀 있어요. 한 장씩 받으면 <b>앞면은 모두에게 공개</b>되고, <b>뒷면은 나만</b> 볼 수 있어요. 1:1 대결이고 칩 <b>30개</b>로 시작하며, 매 판 참가비로 <b>1개</b>씩 내요.',
+        en: 'All 90 cards have <b>a different number (1–10) on each side</b>. Everyone gets one: <b>the front is public</b>, <b>only you see the back</b>. It\'s 1 vs 1, you start with <b>30 chips</b>, and each hand costs <b>1 chip</b> to play.',
+      },
+      html: () => `<div class="tut-felt tut-dual">
+          <div class="tut-dual-seat"><span>${L({ ko: '상대', en: 'Opponent' })}</span>${dcard(6, '?')}</div>
+          <div class="tut-dual-seat me"><span>${t('me')}</span>${dcard(4, 9)}</div>
+        </div>`,
+      play() {
+        stageCards('.tut-dual .dcard').forEach((c, i) => { c.classList.add('deal-in'); c.style.setProperty('--dd', `${i * 200}ms`); });
+        window.SFX && SFX.deal();
+      },
+    },
+    {
+      games: ['dual'],
+      title: { ko: '베팅할 면을 고르세요', en: 'Pick the side you bet on' },
+      text: {
+        ko: '<b>선</b>(판마다 번갈아)부터 <b>앞면 / 뒷면 중 어느 숫자로 승부할지</b> 고르고 칩을 걸어요. <b>한 번 고른 면은 바꿀 수 없어요.</b> 상대도 자기 첫 차례에 면을 골라요. 고른 면은 서로에게 보여서, 상대가 <b>뒷면</b>에 걸면 "뒷면이 큰가?" 하고 추리하게 돼요.',
+        en: 'The <b>first player</b> (alternates each hand) chooses <b>which number to fight with, front or back</b>, and bets. <b>Once chosen, the side can\'t change.</b> The opponent picks theirs on their first turn. Chosen sides are public: if someone bets on their <b>back</b>, maybe it\'s a big one…',
+      },
+      html: () => `<div class="tut-felt tut-dual">
+          <div class="tut-dual-seat"><span>${L({ ko: '상대 · 앞면 베팅', en: 'Opponent · front' })}</span>${dcard(6, '?', 'front')}</div>
+          <div class="tut-dual-seat me"><span>${L({ ko: '나 · 뒷면 베팅', en: 'Me · back' })}</span>${dcard(4, 9, 'back')}</div>
+        </div>`,
+      play() { later(400, () => window.SFX && SFX.chips()); },
+    },
+    {
+      games: ['dual'],
+      title: { ko: '콜하면 바로 공개', en: 'A call reveals at once' },
+      text: {
+        ko: '상대와 <b>같은 칩</b>을 내면(콜) 베팅이 바로 끝나고 <b>고른 면의 숫자만 공개</b>해 <b>큰 숫자가 팟을 가져가요.</b> 더 많이 내면(레이즈) 공개하지 않고 계속 베팅해요. <b>포기</b>하면 무조건 상대 승리(카드는 공개 안 함). <b>숫자가 같으면 무승부</b>, 팟은 그대로 남아 <b>다음 판 승자</b>가 가져가요.',
+        en: '<b>Match</b> the bet (call) and betting ends: <b>only the chosen sides are revealed</b> and <b>the higher number takes the pot.</b> Bet more (raise) to keep going without revealing. <b>Give up</b> and the opponent wins (cards stay hidden). <b>Equal numbers = draw</b>: the pot stays for <b>the next hand\'s winner</b>.',
+      },
+      html: () => `<div class="tut-felt tut-dual">
+          <div class="tut-dual-seat"><span>${L({ ko: '상대', en: 'Opponent' })}</span>${dcard(6, '?', 'front', { front: 'lose' })}</div>
+          <div class="tut-dual-seat me"><span>${t('me')}</span>${dcard(4, 9, 'back', { back: 'win' })}</div>
+          <div class="tut-badge">${L({ ko: '뒷면 9 > 앞면 6 → 승리!', en: 'Back 9 > front 6 → win!' })}</div>
+        </div>`,
+      play() { later(700, () => { stage.querySelector('.tut-badge').classList.add('show'); window.SFX && SFX.win(); }); },
+    },
+    {
+      games: ['dual'],
+      title: { ko: '양면 베팅 (2배 · +10칩)', en: 'Both-sides bet (double · +10)' },
+      text: {
+        ko: '내 <b>앞면과 뒷면 둘 다</b> 상대가 고른 숫자를 이길 것 같으면 <b>양면</b>을 고르세요. <b>두 숫자 모두 더 커야</b> 이기고, 하나라도 같거나 작으면 져요. 대신 상대가 건 만큼을 <b>앞·뒤에 각각</b> 걸어야 해서 <b>칩이 2배</b> 들어요. <b>성공하면 상대 칩 10개를 추가로</b> 가져오고, <b>상대가 포기해도 10개</b>를 받아요. 양면을 건 사람은 져도 추가로 내지 않아요.',
+        en: 'If <b>both your front and back</b> should beat the opponent\'s number, choose <b>Both</b>. <b>Both numbers must be higher</b>; if either is equal or lower, you lose. You match the bet <b>on each side</b>, so it <b>costs double</b>. <b>Win it and take 10 extra chips</b> — and <b>if they give up, they still pay 10</b>. The both-sides bettor pays no extra when losing.',
+      },
+      html: () => `<div class="tut-felt tut-dual">
+          <div class="tut-dual-seat"><span>${L({ ko: '상대 · 앞면 6', en: 'Opponent · front 6' })}</span>${dcard(6, '?', 'front', { front: 'lose' })}</div>
+          <div class="tut-dual-seat me"><span>${L({ ko: '나 · 양면 8/9', en: 'Me · both 8/9' })}</span>${dcard(8, 9, 'both', { front: 'win', back: 'win' })}</div>
+          <div class="tut-badge">${L({ ko: '8 > 6 그리고 9 > 6 → 양면 성공! +10칩', en: '8 > 6 and 9 > 6 → both win! +10' })}</div>
+        </div>`,
+      play() { later(700, () => { stage.querySelector('.tut-badge').classList.add('show'); window.SFX && SFX.win(); }); },
+    },
+    {
+      games: ['dual'],
+      title: { ko: '추리 팁 · 승리 조건', en: 'Reading tips · how to win' },
+      text: {
+        ko: '같은 숫자가 양면에 있는 카드는 없어요. 그래서 <b>상대 앞면이 6이면 뒷면은 6이 아닌 1~10 중 하나</b>예요. 상대가 자신 있게 레이즈하거나 뒷면에 걸면 뒷면이 클 수 있지만, <b>블러핑</b>일 수도! 카드는 다 쓰면 다시 섞어요. <b>칩이 바닥나면 패배</b>(방 설정에서 15/25판 제한을 고르면 그때 칩이 많은 사람이 승리).',
+        en: 'No card has the same number on both sides, so <b>if their front is 6, their back is any of 1–10 except 6</b>. A confident raise or a back-side bet may mean a big back — or a <b>bluff</b>! The deck is reshuffled when it runs out. <b>Run out of chips and you lose</b> (with a 15/25-hand limit set in the room, most chips wins).',
+      },
+      html: () => `<div class="tut-felt tut-dual">
+          <div class="tut-dual-seat"><span>${L({ ko: '상대 뒷면은?', en: 'Their back?' })}</span>${dcard(6, '?')}</div>
+          <div class="tut-badge show" style="font-size:1rem">1 · 2 · 3 · 4 · 5 · <s>6</s> · 7 · 8 · 9 · 10</div>
+        </div>`,
+      play() {},
+    },    {
       games: ['liar'],
       title: { ko: '숫자를 말하며 카드 내기', en: 'Claim a rank, play cards' },
       text: {

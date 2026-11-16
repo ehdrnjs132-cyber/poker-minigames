@@ -164,6 +164,7 @@
     <div id="ipTable" class="ip-table"></div>
     <div id="bombTable" class="ip-table bomb-table"></div>
     <div id="liarTable" class="ip-table liar-table"></div>
+    <div id="dualTable" class="ip-table dual-table"></div>
 
     <div id="spotlight" class="spotlight" role="status" aria-live="polite"></div>
     <div id="overlay" class="overlay"></div>
@@ -197,7 +198,7 @@
     <div class="result-card setup-card">
       <h2 id="setupTitle" data-i18n="setup.title">방 설정</h2>
       <p class="reason"><span id="setupGameName">기억 포커</span> · <button class="tut-inline" id="setupTutorial" data-tutorial="memory" data-i18n="howto">게임 방법</button></p>
-      <div class="setting">
+      <div class="setting" data-only="memory nut indian bomb liar">
         <div class="setting-head"><b data-i18n="setup.players">인원</b></div>
         <div class="seg seg-5" data-key="players">
           <button data-v="2">2</button><button data-v="3">3</button><button data-v="4">4</button><button data-v="5">5</button><button data-v="6">6</button>
@@ -217,7 +218,7 @@
           <button data-v="on" data-i18n="bet.onLabel">켜기</button><button data-v="off" data-i18n="bet.offLabel">끄기</button>
         </div>
       </div>
-      <div class="setting" data-only="memory nut indian liar">
+      <div class="setting" data-only="memory nut indian liar dual">
         <div class="setting-head"><b data-i18n="setup.turn">한 턴 시간</b><span><em id="turnVal">20</em><span data-i18n="sec">초</span></span></div>
         <div class="seg" data-key="turnSec">
           <button data-v="10">10</button><button data-v="15">15</button><button data-v="20">20</button>
@@ -231,6 +232,12 @@
           <button data-v="30">30</button><button data-v="45">45</button><button data-v="60">60</button>
         </div>
         <input type="range" min="5" max="60" step="1" data-key="pickSec" data-i18n-label="setup.pick" />
+      </div>
+      <div class="setting" data-only="dual">
+        <div class="setting-head"><b data-i18n="setup.hands">판 수 제한</b><span data-i18n="setup.handsHint">없음 = 원작대로 칩이 바닥날 때까지</span></div>
+        <div class="seg seg-3" data-key="hands">
+          <button data-v="0" data-i18n="setup.handsNone">없음</button><button data-v="15">15</button><button data-v="25">25</button>
+        </div>
       </div>
       <div class="setting" data-only="bomb">
         <div class="setting-head"><b data-i18n="setup.lives">목숨</b><span data-i18n="setup.livesHint">다 잃으면 탈락</span></div>
@@ -256,6 +263,7 @@
         <button data-g="memory" data-i18n="game.memory">기억 포커</button>
         <button data-g="nut" data-i18n="game.nut">너트 레이스</button>
         <button data-g="indian" data-i18n="game.indian">인디언 포커</button>
+        <button data-g="dual" data-i18n="game.dual">양면 포커</button>
         <button data-g="bomb" data-i18n="game.bomb">폭탄 돌리기</button>
         <button data-g="liar" data-i18n="game.liar">거짓말 카드</button>
       </div>

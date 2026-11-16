@@ -7,7 +7,7 @@
   const root = document.getElementById('lobbyHome');
   if (!root) return;
 
-  const GAMES = ['memory', 'nut', 'indian', 'bomb', 'liar'];
+  const GAMES = ['memory', 'nut', 'indian', 'dual', 'bomb', 'liar'];
   // Mini table art per game: a little felt oval with the game's signature cards.
   const c = (rank, suit, red) => `<span class="lg-card${red ? ' red' : ''}">${rank}<i>${suit}</i></span>`;
   const back = (q = '') => `<span class="lg-card back">${q}</span>`;
@@ -15,6 +15,7 @@
     memory: back() + c('A', '♥', 1) + back(),
     nut: c('K', '♠') + c('K', '♥', 1) + `<span class="lg-badge">NUT</span>`,
     indian: c('7', '♠') + back('?') + c('10', '♥', 1),
+    dual: '<span class="lg-dual"><span class="lg-df">9</span><span class="lg-db">?</span></span><span class="lg-dual"><span class="lg-df">4</span><span class="lg-db">10</span></span><span class="lg-badge">×2</span>',
     bomb: `<span class="lg-bomb">${window.Icons ? Icons.svg('bomb', 'lg-ico') : '💣'}</span>`,
     liar: back('?') + back('?') + `<span class="lg-badge">LIAR</span>`,
   };

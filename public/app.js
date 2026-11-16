@@ -202,7 +202,7 @@
   // ---- create-room settings modal (last choice remembered per browser)
   const setupEl = $('#setup');
   let setupGame = null;
-  let settings = { players: 4, memorizeSec: 30, pickSec: 20, turnSec: 20, betting: 'on', lives: 3, swaps: 5, speed: 'normal' };
+  let settings = { players: 4, memorizeSec: 30, pickSec: 20, turnSec: 20, betting: 'on', lives: 3, swaps: 5, speed: 'normal', hands: 0 };
   try { Object.assign(settings, JSON.parse(pref.get('roomSettings')) || {}); } catch {}
 
   function renderSetup() {
@@ -460,6 +460,10 @@
       return SFX.click();
     }
     if (a === 'raiseTo') return act('raise', { to: ipRaiseTo });
+    if (a === 'dualSide') { dualSide = b.dataset.side; SFX.select(); return render(); }
+    if (a === 'dualStep') { dualTo = b.dataset.to !== undefined ? Number(b.dataset.to) : dualTo + Number(b.dataset.d); SFX.click(); return render(); }
+    if (a === 'dualCall') { SFX.bet(1); return act('call', { side: dualSide }); }
+    if (a === 'dualBet') { SFX.bet(2); return act('raise', { side: dualSide, to: dualTo }); }
     if (a === 'liarPlay') { SFX.deal(); const cards = [...liarSel]; liarSel.clear(); return act('play', { cards }); }
     if (a === 'invite') return copyInvite();
     if (a === 'exit') return $('#leaveBtn').click();
@@ -509,6 +513,18 @@
     $('#room').classList.toggle('game-indian', S.game === 'indian');
     $('#room').classList.toggle('game-bomb', S.game === 'bomb');
     $('#room').classList.toggle('game-liar', S.game === 'liar');
+    $('#room').classList.toggle('game-dual', S.game === 'dual');
+
+    if (S.game === 'dual') {
+      renderDual();
+      renderActions(ctx);
+      renderOverlay(ctx);
+      phaseEffects(ctx);
+      ipChipFly();
+      if (S.notice && JSON.stringify(S.notice) !== JSON.stringify(P?.notice)) toast(I18N.msg(S.notice), 3500);
+      fitRoom();
+      return;
+    }
 
     if (S.game === 'liar') {
       renderLiar();
@@ -566,7 +582,7 @@
       fitQueued = false;
       const room = $('#room');
       if (!room.classList.contains('active')) return;
-      const areas = ['.stage', '#ipTable', '#bombTable', '#liarTable'].map((s) => room.querySelector(s));
+      const areas = ['.stage', '#ipTable', '#bombTable', '#liarTable', '#dualTable'].map((s) => room.querySelector(s));
       const el = areas.find((a) => a && getComputedStyle(a).display !== 'none');
       if (!el) return;
       el.style.transform = '';
@@ -1090,6 +1106,222 @@
 
 
 
+  // ============================================================ Double-sided Poker
+  // 1 vs 1 on the big table: the opponent sits on the far rail, you on the
+  // near rail. Each card has two numbers: the front is public, the back is
+  // yours alone. Pick a side (or both, for double) and bet.
+  let dualSide = null;     // side picked in the panel before the first action
+  let dualTo = 0;          // target level in the bet stepper
+  let dualKey = '';
+  const dualSideName = (s) => t(`dual.${s}`);
+
+  function dualBuild() {
+    const box = $('#dualTable');
+    if (box._built) return;
+    box._built = true;
+    box.innerHTML = `
+      <div class="ip-oval dual-oval" id="dOval">
+        <div class="ip-rail"></div>
+        <div class="ip-felt dual-felt"><div class="ip-logo">DOUBLE · SIDED</div></div>
+        <div class="ip-center dual-center" id="dCenter"></div>
+        <div class="ip-seats" id="dSeats"></div>
+      </div>
+      <div class="ip-bar dual-bar" id="dualActions"></div>`;
+    $('#dualActions').addEventListener('click', onActionClick);
+    $('#dSeats').addEventListener('click', (e) => {
+      const b = e.target.closest('[data-act="removeBot"]');
+      if (b) { SFX.click(); act('removeBot', { id: b.dataset.id }); }
+    });
+  }
+
+  // One double-sided card: front (ivory) + back (black, "?" if hidden).
+  function dualCardHTML(front, back, { side = null, mine = false, reveal = null, big = false } = {}) {
+    const on = (s) => side === s || side === 'both';
+    const hiddenBack = back === null || back === undefined;
+    const won = reveal || {};
+    return `<div class="dcard${big ? ' big' : ''}${mine ? ' mine' : ''}">
+      <div class="dface df-front${on('front') ? ' on' : ''}${won.front ? ` ${won.front}` : ''}"><em>${t('dual.frontS')}</em><b>${front ?? '?'}</b></div>
+      <div class="dface df-back${hiddenBack ? ' hidden' : ''}${on('back') ? ' on' : ''}${won.back ? ` ${won.back}` : ''}"><em>${t('dual.backS')}</em><b>${hiddenBack ? '?' : back}</b></div>
+    </div>`;
+  }
+
+  function renderDual() {
+    dualBuild();
+    const oval = $('#dOval');
+    const tall = oval.clientHeight > oval.clientWidth;
+    const slots = tall ? [[50, 86], [50, 13]] : [[50, 86], [50, 13]];
+    const seated = ipSeatOrder().slice(0, 2);
+    const box = $('#dSeats');
+    const wanted = new Set();
+    seated.forEach((p, i) => {
+      const [x, y] = slots[i];
+      const id = p ? p.id : 'empty';
+      wanted.add(id);
+      let el = box.querySelector(`.iseat[data-id="${id}"]`);
+      if (!el) { el = document.createElement('div'); el.dataset.id = id; box.appendChild(el); }
+      el.style.left = `${x}%`;
+      el.style.top = `${y}%`;
+      el.style.setProperty('--bx', '0px');
+      el.style.setProperty('--by', `${(i === 0 ? -1 : 1) * oval.clientHeight * 0.2}px`);
+      if (!p) {
+        el.className = 'iseat dseat empty';
+        setHTML(el, `<div class="is-avatar-wrap"><div class="is-avatar avatar empty-av">+</div></div><div class="is-plate"><b class="dots">${t('seat.waiting')}</b></div>`);
+        return;
+      }
+      const isMe = p.id === S.me;
+      const turn = S.phase === 'bet' && S.turn === p.id;
+      const isWinner = S.phase === 'showdown' && S.result?.winners.includes(p.id);
+      el.className = `iseat dseat${isMe ? ' me' : ''}${turn ? ' turn' : ''}${isWinner ? ' winner' : ''}${p.folded ? ' folded' : ''}${i === 1 ? ' top' : ''}`;
+      setHTML(el, dualSeatHTML(p, isMe, isWinner));
+    });
+    [...box.children].forEach((el) => !wanted.has(el.dataset.id) && el.remove());
+    setHTML($('#dCenter'), dualCenterHTML());
+    renderDualStatus();
+  }
+
+  function dualSeatHTML(p, isMe, isWinner) {
+    const ph = S.phase;
+    const inHand = ph === 'bet' || ph === 'showdown';
+    // At the showdown, mark the compared faces green (won) / red (lost).
+    let reveal = null;
+    if (ph === 'showdown' && S.result && !S.result.uncontested) {
+      const h = S.result.hands.find((x) => x.id === p.id);
+      const cls = S.result.tie ? 'tie' : isWinner ? 'win' : 'lose';
+      reveal = {};
+      if (h.side === 'both' || h.side === 'front') reveal.front = cls;
+      if (h.side === 'both' || h.side === 'back') reveal.back = cls;
+    }
+    const card = inHand && p.hasCard ? dualCardHTML(p.front, p.back, { side: p.side, mine: isMe, reveal }) : '';
+    let badge = '';
+    if (!p.connected) badge = `<span class="badge warn">${t('badge.off')}</span>`;
+    else if (ph === 'lobby' || ph === 'gameover') badge = p.ready ? `<span class="badge ok">${t('badge.ready')}</span>` : `<span class="badge">${t('badge.wait')}</span>`;
+    else if (inHand) {
+      if (p.side) badge += `<span class="badge side s-${p.side}">${t('dual.badgeSide', { side: dualSideName(p.side) })}</span>`;
+      const a = p.lastAction;
+      if (ph === 'bet' && S.turn === p.id) badge += `<span class="badge think dots">${t('ip.thinking')}</span>`;
+      else if (a) badge += `<span class="badge ${a.kind === 'fold' ? 'warn' : 'ok'}">${a.kind === 'fold' ? t(a.timeout ? 'dual.act.timeout' : 'dual.act.fold') : a.kind === 'call' ? t('dual.act.call') : t(`dual.act.${a.kind}`, { n: a.amount })}</span>`;
+    }
+    let delta = '';
+    if (ph === 'showdown' && S.result && !S.result.tie) {
+      const h = S.result.hands.find((x) => x.id === p.id);
+      const net = isWinner ? S.result.share - S.result.ante - h.bet : -(S.result.ante + h.bet + (S.result.bonus && !isWinner ? S.result.bonus : 0));
+      if (net) delta = `<span class="delta ${net > 0 ? 'plus' : 'minus'}">${net > 0 ? '+' : ''}${fmt(net)}</span>`;
+    }
+    const bet = ph === 'bet' && p.bet ? `<div class="is-bet"><span class="chip-stack"><i></i><i></i><i></i></span><b>${fmt(p.bet)}</b></div>` : '';
+    const first = S.firstId === p.id && ph === 'bet' ? `<span class="dealer-btn" title="${t('dual.first')}">${t('dual.first')}</span>` : '';
+    const botTag = p.bot ? `<span class="bot-tag">BOT·${t(`lvl.${p.bot}`)}</span>` : '';
+    const removeBtn = p.bot && ph === 'lobby' ? `<button class="seat-x" data-act="removeBot" data-id="${p.id}" aria-label="${t('bot.remove')}">×</button>` : '';
+    return `${removeBtn}
+      <div class="is-card d-cardslot">${card}</div>
+      <div class="is-avatar-wrap">
+        <svg class="is-ring" viewBox="0 0 100 100" aria-hidden="true"><circle cx="50" cy="50" r="46"/></svg>
+        <div class="is-avatar avatar${p.connected ? '' : ' off'}" style="background:${colorFor(p.id)}">${avatarInner(p)}</div>
+        ${first}
+      </div>
+      <div class="is-plate"><b>${esc(p.name)}${isMe ? `<em>${t('me')}</em>` : ''}</b><span><i class="chip-icon"></i>${fmt(p.chips)} ${delta}</span>${botTag}</div>
+      <div class="is-badges">${badge}</div>
+      ${bet}`;
+  }
+
+  function dualCenterHTML() {
+    const status = `<div class="ipc-status"><b id="dLabel"></b><span id="dSub"></span></div>`;
+    if (S.phase === 'lobby') return `${status}<div class="ipc-rules">${t('dual.lobbyRules', { b: S.bonus })}</div>`;
+    const inResult = S.phase === 'showdown' || S.phase === 'gameover';
+    const pot = inResult && S.result ? S.result.pot : S.pot;
+    const chips = Math.min(14, Math.ceil((pot || 0) / 2));
+    return `${status}
+      <div class="ipc-pot">
+        <div class="ipc-pile">${Array.from({ length: chips }, (_, i) => `<i style="--i:${i}"></i>`).join('')}</div>
+        <div class="ipc-amount"><span>${t('dual.pot')}</span><b>${fmt(pot || 0)}</b></div>
+      </div>
+      <div class="ipc-info">
+        ${S.carry || (S.result?.tie && S.phase === 'showdown') ? `<span class="d-carry">${t('dual.carry', { n: fmt(S.carry || S.result?.carry || 0) })}</span>` : ''}
+        <span>${t('dual.deck')} <b>${S.deckLeft ?? '-'}</b></span>
+      </div>`;
+  }
+
+  function dualReason() {
+    const r = S.result;
+    if (!r) return '';
+    const nameOf = (id) => S.players.find((p) => p.id === id)?.name || '';
+    if (r.uncontested) {
+      return r.bonus ? t('dual.whyFoldBoth', { name: nameOf(r.foldedId), n: r.bonus }) : t('dual.whyFold', { name: nameOf(r.foldedId) });
+    }
+    if (r.tie) return t('dual.whyTie', { n: fmt(r.carry) });
+    if (r.bothId) return r.bothWon ? t('dual.whyBothWin', { name: nameOf(r.bothId), n: r.bonus }) : t('dual.whyBothLose', { name: nameOf(r.bothId) });
+    const txt = (h) => `${nameOf(h.id)} ${dualSideName(h.side)} ${h.side === 'back' ? h.back : h.front}`;
+    const [a, b] = r.hands;
+    return t('dual.whyNormal', { a: txt(a), b: txt(b), name: nameOf(r.winners[0]) });
+  }
+
+  function renderDualStatus() {
+    const ph = S.phase;
+    const turnP = S.players.find((p) => p.id === S.turn);
+    const myTurn = ph === 'bet' && S.turn === S.me;
+    const others = S.players.filter((p) => p.id !== S.me);
+    const label = {
+      lobby: others.length ? t('ph.lobbyReady') : t('ph.lobbyWait'),
+      bet: myTurn ? t('dual.yourTurn') : t('dual.turnOf', { name: turnP?.name || '' }),
+      showdown: S.result?.tie ? t('go.draw') : t('ph.showdown'),
+      gameover: t('ph.gameover'),
+    }[ph] || '';
+    const opened = S.players.some((p) => p.lastAction && p.lastAction.kind !== 'fold');
+    const sub = {
+      lobby: [t('sub.count', { n: S.players.length, max: 2 }), t('ip.turnTime', { p: Math.round(S.durations.bet / 1000) })].join(' · '),
+      bet: myTurn ? (opened ? t('dual.hintRespond') : t('dual.hintOpen')) : t('dual.secret'),
+      showdown: dualReason(),
+    }[ph] || '';
+    const lab = $('#dLabel');
+    if (lab) { lab.textContent = label; $('#dSub').textContent = sub; }
+    showBanner(() => {
+      const h = S.result.hands.find((x) => x.id === S.me);
+      return h && !h.folded && h.side ? t('dual.myResult', { side: dualSideName(h.side), n: h.side === 'both' ? `${h.front}/${h.back}` : h.side === 'back' ? h.back : h.front }) : '';
+    }, dualReason);
+  }
+
+  // Betting panel: choose a side (locked after your first action), then
+  // give up / call / bet-or-raise with a stepper.
+  function dualActionsHTML(me) {
+    const o = S.options;
+    if (S.turn !== S.me || !o) {
+      const turnP = S.players.find((p) => p.id === S.turn);
+      const mine = me.side ? `<span class="badge side s-${me.side}">${t('dual.sideLocked', { side: dualSideName(me.side) })}</span>` : '';
+      return `<div class="ipa-row">${mine}<span class="hint dots">${t('dual.waitTurn', { name: turnP?.name || '' })}</span></div>`;
+    }
+    const key = `${S.dealId}:${o.oppLevel}:${o.myLevel}`;
+    if (key !== dualKey) { dualKey = key; dualSide = o.mySide; dualTo = 0; }
+    if (o.mySide) dualSide = o.mySide;
+    if (dualSide && !o.sides[dualSide]) dualSide = null;
+    const side = dualSide;
+    const mult = side === 'both' ? 2 : 1;
+    const cap = side ? o.sides[side].cap : 0;
+    const min = o.toCall === null ? (o.canOpenZero && cap === 0 ? 0 : 1) : o.toCall + 1;
+    const canRaise = !!side && cap >= min;
+    if (canRaise) dualTo = Math.max(min, Math.min(cap, dualTo || min));
+    const sideBtns = o.mySide ? '' : `<div class="d-sides">${['front', 'back', 'both'].map((s) => {
+      const ok = !!o.sides[s];
+      const num = s === 'front' ? me.front : s === 'back' ? me.back : `${me.front}·${me.back}`;
+      return `<button class="d-side s-${s}${side === s ? ' on' : ''}" data-act="dualSide" data-side="${s}" ${ok ? '' : 'disabled'}><em>${dualSideName(s)}</em><b>${num}</b>${s === 'both' ? `<small>${t('dual.bothCost')} · +${S.bonus}</small>` : ''}</button>`;
+    }).join('')}</div>`;
+    const fold = `<button class="btn ip-fold" data-act="fold">${t('dual.fold')}${o.foldPenalty ? `<small>${t('dual.foldPen', { n: o.foldPenalty })}</small>` : ''}</button>`;
+    const callCost = o.toCall === null ? 0 : (o.toCall - o.myLevel) * mult;
+    const call = o.toCall === null ? '' : `<button class="btn blue" data-act="dualCall" ${side ? '' : 'disabled'}>${t('dual.call', { n: o.toCall })}${side ? `<small>${t('dual.cost', { n: callCost })}</small>` : ''}</button>`;
+    let raise = '';
+    if (side && canRaise) {
+      const cost = (dualTo - o.myLevel) * mult;
+      const label = o.toCall === null ? (dualTo === 0 ? t('dual.showZero') : t('dual.open', { n: dualTo })) : t('dual.raise', { n: dualTo });
+      raise = `<div class="d-step">
+          <button class="d-pm" data-act="dualStep" data-d="-1" ${dualTo <= min ? 'disabled' : ''}>−</button>
+          <div class="d-amt"><b>${dualTo}</b>${side === 'both' ? '<small>×2</small>' : ''}</div>
+          <button class="d-pm" data-act="dualStep" data-d="1" ${dualTo >= cap ? 'disabled' : ''}>+</button>
+          <button class="ipq" data-act="dualStep" data-to="${min}">${t('dual.min')}</button>
+          <button class="ipq" data-act="dualStep" data-to="${cap}">${t('dual.allin')}</button>
+        </div>
+        <button class="btn gold big" data-act="dualBet">${label}<small>${t('dual.cost', { n: cost })}</small></button>`;
+    }
+    const hint = side ? '' : `<span class="hint">${t('dual.pickSide')}</span>`;
+    return `${sideBtns}<div class="ipa-row d-row">${fold}${call}${raise}${hint}</div>`;
+  }
   // ============================================================ Bomb Pass
   // Party mat with seats around it; a cat-shaped bomb sits on the holder and
   // flies to whoever they tap. Its face gets more scared as the fuse burns.
@@ -1447,7 +1679,7 @@
     if (ph === 'showdown' && P?.phase !== 'showdown' && S.result && !S.result.voided) {
       clearTimeout(bannerTimer);
       // Let the table reveal play first, then take the stage.
-      const delay = S.game === 'indian' ? 1500 : S.game === 'nut' ? 500 : 1300;
+      const delay = S.game === 'indian' || S.game === 'dual' ? 1500 : S.game === 'nut' ? 500 : 1300;
       const d = detail();
       const why = reason();
       bannerTimer = setTimeout(() => openSpotlight(d, why), delay);
@@ -1466,11 +1698,15 @@
     const split = winners.length > 1;
     const wHand = r.hands.find((h) => h.id === r.winners[0]);
     const indian = S.game === 'indian';
-    const handName = r.uncontested ? t('sp.allFold') : indian ? t('sp.indianWin', { n: ipRankName(wHand.value) }) : I18N.hand(wHand.score);
+    const dual = S.game === 'dual';
+    const dualName = () => (r.uncontested ? t('dual.spFold') : r.bothWon ? t('dual.spBoth') : t('dual.spValue', { side: dualSideName(wHand.side), n: wHand.side === 'back' ? wHand.back : wHand.side === 'both' ? `${wHand.front}/${wHand.back}` : wHand.front }));
+    const handName = dual ? dualName() : r.uncontested ? t('sp.allFold') : indian ? t('sp.indianWin', { n: ipRankName(wHand.value) }) : I18N.hand(wHand.score);
     const title = split ? t('sp.split') : iWon ? t('sp.youWin') : t('sp.wins', { name: winners[0].name });
 
     let cards = '';
-    if (indian && !r.uncontested) {
+    if (dual && !r.uncontested) {
+      cards = dualCardHTML(wHand.front, wHand.back ?? null, { side: wHand.side, big: true, reveal: { front: wHand.side !== 'back' ? 'win' : '', back: wHand.side !== 'front' ? 'win' : '' } });
+    } else if (indian && !r.uncontested) {
       cards = winners.map((w, i) => cardHTML(r.hands.find((h) => h.id === w.id).card, '', { cls: 'sp-card big', style: `--i:${i}` })).join('');
     } else if (!r.uncontested) {
       const own = new Set(wHand.cards);
@@ -1614,7 +1850,7 @@
   }
 
   function renderActions({ me, opp }) {
-    const bar = S.game === 'indian' ? $('#ipActions') : S.game === 'bomb' ? $('#bombActions') : S.game === 'liar' ? $('#liarActions') : $('#actionBar');
+    const bar = S.game === 'dual' ? $('#dualActions') : S.game === 'indian' ? $('#ipActions') : S.game === 'bomb' ? $('#bombActions') : S.game === 'liar' ? $('#liarActions') : $('#actionBar');
     if (!me) return setHTML(bar, spectatorActions());
     const ph = S.phase;
     let html = '';
@@ -1631,6 +1867,8 @@
           ${full ? '' : `<button class="btn ghost" data-act="invite">${t('invite.copy')}</button>`}
           <button class="btn ${me.ready ? 'ghost' : 'gold'} big" data-act="ready" ${opp ? '' : 'disabled'}>${me.ready ? t('act.unready') : t('act.ready')}</button>
         </div>${bots}`;
+    } else if (S.game === 'dual') {
+      html = ph === 'bet' ? dualActionsHTML(me) : '';
     } else if (S.game === 'liar' && ph !== 'gameover') {
       html = liarActionsHTML(me);
     } else if (S.game === 'bomb' && ph !== 'gameover') {
@@ -1740,7 +1978,7 @@
       if (!a || (b && a.kind === b.kind && a.amount === b.amount)) continue;
       let level = 0;
       if (a.kind === 'call') level = 1;
-      else if (a.kind === 'raise') level = a.amount >= Math.max(200, (S.pot || 0) * 0.75) ? 3 : 2;
+      else if (a.kind === 'raise' || a.kind === 'bet') level = a.amount >= Math.max(200, (S.pot || 0) * 0.75) ? 3 : 2;
       else if (a.kind === 'allin') level = 4;
       if (!level) continue;
       const seat = document.querySelector(`.iseat[data-id="${p.id}"] .is-avatar, .seat[data-id="${p.id}"] .avatar`);
@@ -1756,8 +1994,8 @@
       // Chip sound whenever someone puts money in.
 
     }
-    if (S.game === 'indian') {
-      if (S.phase === 'bet' && P?.dealId !== S.dealId) { SFX.shuffle(); SFX.deal(); }
+    if (S.game === 'indian' || S.game === 'dual') {
+      if (S.phase === 'bet' && P?.phase !== 'bet') { SFX.shuffle(); SFX.deal(); }
       if (S.phase === 'gameover' && P?.phase !== 'gameover' && S.final?.championId === S.me) SFX.fanfare();
       return;
     }
@@ -1812,7 +2050,7 @@
     const sec = Math.ceil(left / 1000);
     timerEl.classList.remove('hidden');
     timerNum.textContent = sec;
-    const ring = S.game === 'indian' && document.querySelector('.iseat.turn .is-ring circle');
+    const ring = (S.game === 'indian' || S.game === 'dual') && document.querySelector('.iseat.turn .is-ring circle');
     if (S.game === 'bomb' && S.phase === 'countdown') setHTML($('#bCenter'), bombCenterHTML());
     if (ring) ring.style.strokeDashoffset = String(289 * (1 - left / total));
     timerBar.style.strokeDashoffset = String(CIRC * (1 - left / total));

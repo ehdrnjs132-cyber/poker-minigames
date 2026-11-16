@@ -19,6 +19,7 @@ const GAMES = {
   indian: require('./games/indianPoker'),
   bomb: require('./games/bombParty'),
   liar: require('./games/pinocchio'),
+  dual: require('./games/dualPoker'),
 };
 const Bots = require('./bots');
 const store = require('./store');
