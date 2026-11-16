@@ -460,7 +460,12 @@
       return SFX.click();
     }
     if (a === 'raiseTo') return act('raise', { to: ipRaiseTo });
-    if (a === 'dualSide') { dualSide = b.dataset.side; SFX.select(); return render(); }
+    if (a === 'dualSide') {
+      dualSide = b.dataset.side;
+      SFX.select();
+      if (dualSide !== 'both') return dualPeek(dualSide === 'back');
+      return render();
+    }
     if (a === 'dualStep') { dualTo = b.dataset.to !== undefined ? Number(b.dataset.to) : dualTo + Number(b.dataset.d); SFX.click(); return render(); }
     if (a === 'dualCall') { SFX.bet(1); return act('call', { side: dualSide }); }
     if (a === 'dualBet') { SFX.bet(2); return act('raise', { side: dualSide, to: dualTo }); }
@@ -976,7 +981,7 @@
         ${dealer}
       </div>
       <div class="is-plate"><b>${esc(p.name)}${isMe ? `<em>${t('me')}</em>` : ''}</b><span><i class="chip-icon"></i>${fmt(p.chips)} ${delta}</span>${botTag}</div>
-      <div class="is-badges">${badge}</div>
+      <div class="is-badges">${badge0}${badge}</div>
       ${bet}`;
   }
 
@@ -1130,7 +1135,8 @@
     $('#dualActions').addEventListener('click', onActionClick);
     $('#dSeats').addEventListener('click', (e) => {
       const b = e.target.closest('[data-act="removeBot"]');
-      if (b) { SFX.click(); act('removeBot', { id: b.dataset.id }); }
+      if (b) { SFX.click(); act('removeBot', { id: b.dataset.id }); return; }
+      if (e.target.closest('.iseat.me .dflip')) dualPeek();
     });
   }
 
@@ -1173,6 +1179,7 @@
       const isWinner = S.phase === 'showdown' && S.result?.winners.includes(p.id);
       el.className = `iseat dseat${isMe ? ' me' : ''}${turn ? ' turn' : ''}${isWinner ? ' winner' : ''}${p.folded ? ' folded' : ''}${i === 1 ? ' top' : ''}`;
       setHTML(el, dualSeatHTML(p, isMe, isWinner));
+      dualFlipMount(el, p, isMe);
     });
     [...box.children].forEach((el) => !wanted.has(el.dataset.id) && el.remove());
     setHTML($('#dCenter'), dualCenterHTML());
@@ -1184,6 +1191,8 @@
     const inHand = ph === 'bet' || ph === 'showdown';
     // At the showdown, mark the compared faces green (won) / red (lost).
     let reveal = null;
+    let badge = '';
+    let badge0 = '';
     if (ph === 'showdown' && S.result && !S.result.uncontested) {
       const h = S.result.hands.find((x) => x.id === p.id);
       const cls = S.result.tie ? 'tie' : isWinner ? 'win' : 'lose';
@@ -1191,8 +1200,11 @@
       if (h.side === 'both' || h.side === 'front') reveal.front = cls;
       if (h.side === 'both' || h.side === 'back') reveal.back = cls;
     }
-    const card = inHand && p.hasCard ? dualCardHTML(p.front, p.back, { side: p.side, mine: isMe, reveal }) : '';
-    let badge = '';
+    // During betting: one flip card (tap your own to peek). At a revealed showdown: both faces side by side.
+    const card = !inHand || !p.hasCard ? '<div class="is-card d-cardslot"></div>'
+      : reveal ? `<div class="is-card d-cardslot">${dualCardHTML(p.front, p.back, { side: p.side, mine: isMe, reveal })}</div>`
+      : '<div class="is-card d-cardslot flip-slot"></div>';
+    if (p.peek && !isMe && ph === 'bet') badge0 = `<span class="badge peek">${t('dual.peeking')}</span>`;
     if (!p.connected) badge = `<span class="badge warn">${t('badge.off')}</span>`;
     else if (ph === 'lobby' || ph === 'gameover') badge = p.ready ? `<span class="badge ok">${t('badge.ready')}</span>` : `<span class="badge">${t('badge.wait')}</span>`;
     else if (inHand) {
@@ -1212,17 +1224,68 @@
     const botTag = p.bot ? `<span class="bot-tag">BOT·${t(`lvl.${p.bot}`)}</span>` : '';
     const removeBtn = p.bot && ph === 'lobby' ? `<button class="seat-x" data-act="removeBot" data-id="${p.id}" aria-label="${t('bot.remove')}">×</button>` : '';
     return `${removeBtn}
-      <div class="is-card d-cardslot">${card}</div>
+      ${card}
       <div class="is-avatar-wrap">
         <svg class="is-ring" viewBox="0 0 100 100" aria-hidden="true"><circle cx="50" cy="50" r="46"/></svg>
         <div class="is-avatar avatar${p.connected ? '' : ' off'}" style="background:${colorFor(p.id)}">${avatarInner(p)}</div>
         ${first}
       </div>
       <div class="is-plate"><b>${esc(p.name)}${isMe ? `<em>${t('me')}</em>` : ''}</b><span><i class="chip-icon"></i>${fmt(p.chips)} ${delta}</span>${botTag}</div>
-      <div class="is-badges">${badge}</div>
+      <div class="is-badges">${badge0}${badge}</div>
       ${bet}`;
   }
 
+  // ---- the flip card ------------------------------------------------------
+  // A real 3D card that turns over. Your own back shows its number; anyone
+  // else's back is the patterned card back with a "?" — they see you flip,
+  // never the number. The node is kept between renders so the turn animates.
+  let dualPeekLocal = null; // optimistic flip state while the server catches up
+  function dualFlipInner(p, isMe) {
+    const backFace = isMe
+      ? `<div class="fl-face fl-back mine"><i class="fl-c tl">${p.back}</i><b>${p.back}</b><i class="fl-c br">${p.back}</i><em>${t('dual.backS')}</em></div>`
+      : `<div class="fl-face fl-back secret"><span class="fl-medal">?</span><em>${t('dual.backS')}</em></div>`;
+    return `<div class="fl-inner">
+        <div class="fl-face fl-front"><i class="fl-c tl">${p.front}</i><b>${p.front}</b><i class="fl-c br">${p.front}</i><em>${t('dual.frontS')}</em></div>
+        ${backFace}
+      </div>
+      <span class="fl-rib"></span>
+      ${isMe ? `<span class="fl-tap">${t('dual.tapFlip')}</span>` : ''}`;
+  }
+  function dualFlipMount(el, p, isMe) {
+    const slot = el.querySelector('.flip-slot');
+    if (!slot) { el._flip = null; return; }
+    const key = `${S.dealId}:${p.front}:${isMe ? p.back : 'x'}:${I18N.lang}`;
+    let fl = el._flip;
+    const fresh = !fl || fl._key !== key;
+    if (fresh) {
+      fl = el._flip = document.createElement('div');
+      fl._key = key;
+      fl.className = `dflip${isMe ? ' mine' : ''}`;
+      fl.innerHTML = dualFlipInner(p, isMe);
+      fl.classList.add('deal-in');
+      if (isMe) dualPeekLocal = null;
+    }
+    if (fl.parentNode !== slot) { slot.appendChild(fl); reflow(fl); }
+    const want = isMe && dualPeekLocal !== null ? dualPeekLocal : !!p.peek;
+    if (isMe && dualPeekLocal === !!p.peek) dualPeekLocal = null;
+    if (fl.classList.contains('flipped') !== want) {
+      fl.classList.toggle('flipped', want);
+      if (!fresh) SFX.flip(0);
+    }
+    const rib = fl.querySelector('.fl-rib');
+    rib.textContent = p.side ? `${dualSideName(p.side)} BET` : '';
+    rib.className = `fl-rib${p.side ? ` on s-${p.side}` : ''}`;
+  }
+  function dualPeek(force) {
+    const me = S?.players.find((p) => p.id === S.me);
+    if (!me || S.phase !== 'bet' || !me.hasCard) return;
+    const cur = dualPeekLocal !== null ? dualPeekLocal : !!me.peek;
+    const next = force === undefined ? !cur : force;
+    if (next === cur) return;
+    dualPeekLocal = next;
+    act('peek', { on: next });
+    render();
+  }
   function dualCenterHTML() {
     const status = `<div class="ipc-status"><b id="dLabel"></b><span id="dSub"></span></div>`;
     if (S.phase === 'lobby') return `${status}<div class="ipc-rules">${t('dual.lobbyRules', { b: S.bonus })}</div>`;
@@ -1422,7 +1485,7 @@
           ${target ? `<span class="throw-here">${t('bomb.throwHere')}</span>` : ''}
         </div>
         <div class="is-plate"><b>${esc(p.name)}${isMe ? `<em>${t('me')}</em>` : ''}</b><span class="hearts">${hearts}</span>${botTag}</div>
-        <div class="is-badges">${badge}</div>`);
+        <div class="is-badges">${badge0}${badge}</div>`);
     });
     [...box.children].forEach((el) => !wanted.has(el.dataset.id) && el.remove());
 
@@ -1600,7 +1663,7 @@
           <span class="nose${twitch}" style="--len:${14 + p.nose * 13}px"><i></i></span>
         </div>
         <div class="is-plate"><b>${esc(p.name)}${isMe ? `<em>${t('me')}</em>` : ''}</b><span>🚨 ${p.nose} · 🃏 ${p.cards}</span>${botTag}</div>
-        <div class="is-badges">${badge}</div>`);
+        <div class="is-badges">${badge0}${badge}</div>`);
     });
     [...box.children].forEach((el) => !wanted.has(el.dataset.id) && el.remove());
 

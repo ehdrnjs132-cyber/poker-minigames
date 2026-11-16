@@ -114,7 +114,7 @@ class DualPoker {
   }
 
   freshSeat(p) {
-    return { ready: !!p?.bot, card: null, side: null, level: 0, put: 0, folded: false, acted: false, lastAction: null };
+    return { ready: !!p?.bot, card: null, side: null, level: 0, put: 0, folded: false, acted: false, lastAction: null, peek: false, peekAt: 0 };
   }
 
   onJoin(player) {
@@ -147,6 +147,7 @@ class DualPoker {
         s.ready = !s.ready;
         if (!this.tryStart()) this.changed();
         return;
+      case 'peek': return this.peek(playerId, !!action.on);
       case 'fold': return this.fold(playerId);
       case 'call': return this.call(playerId, action.side);
       case 'bet':
@@ -189,7 +190,7 @@ class DualPoker {
     this.carry = 0;
     for (const p of this.players) {
       const s = this.ps.get(p.id);
-      Object.assign(s, { card: this.draw(), side: null, level: 0, put: 0, folded: false, acted: false, lastAction: null });
+      Object.assign(s, { card: this.draw(), side: null, level: 0, put: 0, folded: false, acted: false, lastAction: null, peek: false });
       const ante = Math.min(CFG.ante, s.chips);
       s.chips -= ante;
       s.ante = ante;
@@ -198,6 +199,30 @@ class DualPoker {
     this.phase = 'bet';
     this.setTurn(this.firstId);
     this.changed();
+    this.botPeeks();
+  }
+
+  // Flip your own card to look at the back. Everyone sees the card turn over,
+  // but only the owner gets the number (see viewFor).
+  peek(id, on) {
+    const s = this.ps.get(id);
+    if (this.phase !== 'bet' || !s?.card || s.peek === on) return;
+    const now = Date.now();
+    if (now - s.peekAt < 120) return; // no flip spam
+    s.peek = on;
+    s.peekAt = now;
+    this.changed();
+  }
+
+  // Bots glance at their back after the deal, like a person would.
+  botPeeks() {
+    const dealId = this.dealId;
+    for (const p of this.players) {
+      if (!p.bot) continue;
+      const look = rand(500, 1500);
+      this.later(look, () => { if (this.dealId === dealId) this.peek(p.id, true); });
+      this.later(look + rand(900, 1800), () => { if (this.dealId === dealId) this.peek(p.id, false); });
+    }
   }
 
   setTurn(id) {
@@ -445,8 +470,11 @@ class DualPoker {
     const L = BOT[p.bot] || BOT.normal;
     const dealId = this.dealId;
     const id = p.id;
+    // Sometimes take another look at the back while thinking.
+    if (chance(0.45)) this.timers.push(setTimeout(() => { if (this.turn === id && this.dealId === dealId) this.peek(id, true); }, 350));
     this.timers.push(setTimeout(() => {
       if (this.phase !== 'bet' || this.turn !== id || this.dealId !== dealId) return;
+      this.peek(id, false);
       this.botAct(id, L);
     }, rand(...L.think)));
   }
@@ -551,7 +579,7 @@ class DualPoker {
         return {
           id: p.id, name: p.name, bot: p.bot || null, connected: p.connected, ready: s.ready, pending: false, out: false,
           chips: s.chips, front: inHand && s.card ? s.card[0] : null, back, hasCard: inHand && !!s.card,
-          side: s.side, level: s.level, bet: s.put, folded: s.folded, lastAction: s.lastAction,
+          side: s.side, level: s.level, bet: s.put, folded: s.folded, lastAction: s.lastAction, peek: this.phase === 'bet' && s.peek,
         };
       }),
       result: this.result,

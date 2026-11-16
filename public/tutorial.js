@@ -48,7 +48,11 @@ const Tutorial = (() => {
   const dcard = (front, back, side = null, res = {}) => `<div class="dcard">
       <div class="dface df-front${side === 'front' || side === 'both' ? ' on' : ''}${res.front ? ` ${res.front}` : ''}"><em>${L({ ko: '앞', en: 'F' })}</em><b>${front}</b></div>
       <div class="dface df-back${back === '?' ? ' hidden' : ''}${side === 'back' || side === 'both' ? ' on' : ''}${res.back ? ` ${res.back}` : ''}"><em>${L({ ko: '뒤', en: 'B' })}</em><b>${back}</b></div>
-    </div>`;  const STEPS = [
+    </div>`;  // A flip card like the one at the table (front ivory, back black).
+  const flipCard = (front, back) => `<div class="dflip mine"><div class="fl-inner">
+      <div class="fl-face fl-front"><i class="fl-c tl">${front}</i><b>${front}</b><i class="fl-c br">${front}</i><em>${L({ ko: '앞', en: 'F' })}</em></div>
+      <div class="fl-face fl-back mine"><i class="fl-c tl">${back}</i><b>${back}</b><i class="fl-c br">${back}</i><em>${L({ ko: '뒤', en: 'B' })}</em></div>
+    </div></div>`;  const STEPS = [
     {
       games: ['memory'],
       title: { ko: "카드 위치를 외우세요", en: "Memorize the card positions" },
@@ -247,16 +251,19 @@ const Tutorial = (() => {
       games: ['dual'],
       title: { ko: '카드 한 장, 숫자 두 개', en: 'One card, two numbers' },
       text: {
-        ko: '카드 90장은 <b>앞면과 뒷면에 서로 다른 숫자(1~10)</b>가 적혀 있어요. 한 장씩 받으면 <b>앞면은 모두에게 공개</b>되고, <b>뒷면은 나만</b> 볼 수 있어요. 1:1 대결이고 칩 <b>30개</b>로 시작하며, 매 판 참가비로 <b>1개</b>씩 내요.',
-        en: 'All 90 cards have <b>a different number (1–10) on each side</b>. Everyone gets one: <b>the front is public</b>, <b>only you see the back</b>. It\'s 1 vs 1, you start with <b>30 chips</b>, and each hand costs <b>1 chip</b> to play.',
+        ko: '카드 90장은 <b>앞면과 뒷면에 서로 다른 숫자(1~10)</b>가 적혀 있어요. 한 장씩 받으면 <b>앞면은 모두에게 공개</b>되고, <b>뒷면은 나만</b> 볼 수 있어요. <b>내 카드를 탭하면 휙 뒤집혀서</b> 뒷면을 확인할 수 있고, 상대에게도 <b>내가 뒤집는 모습은 보이지만 숫자는 안 보여요.</b> 1:1 대결이고 칩 <b>30개</b>로 시작하며, 매 판 참가비로 <b>1개</b>씩 내요.',
+        en: 'All 90 cards have <b>a different number (1–10) on each side</b>. Everyone gets one: <b>the front is public</b>, <b>only you see the back</b>. <b>Tap your card to flip it</b> and peek at the back — your opponent <b>sees you flip, but never the number.</b> It\'s 1 vs 1, you start with <b>30 chips</b>, and each hand costs <b>1 chip</b> to play.',
       },
       html: () => `<div class="tut-felt tut-dual">
           <div class="tut-dual-seat"><span>${L({ ko: '상대', en: 'Opponent' })}</span>${dcard(6, '?')}</div>
-          <div class="tut-dual-seat me"><span>${t('me')}</span>${dcard(4, 9)}</div>
+          <div class="tut-dual-seat me"><span>${t('me')}</span>${flipCard(4, 9)}</div>
         </div>`,
       play() {
-        stageCards('.tut-dual .dcard').forEach((c, i) => { c.classList.add('deal-in'); c.style.setProperty('--dd', `${i * 200}ms`); });
+        stageCards('.tut-dual .dcard, .tut-dual .dflip').forEach((c, i) => { c.classList.add('deal-in'); c.style.setProperty('--dd', `${i * 200}ms`); });
         window.SFX && SFX.deal();
+        const fl = stage.querySelector('.tut-dual .dflip');
+        const flip = () => { if (!fl.isConnected) return; fl.classList.toggle('flipped'); window.SFX && SFX.flip(0); later(1500, flip); };
+        later(1100, flip);
       },
     },
     {
