@@ -192,41 +192,22 @@ const SFX = (() => {
     },
     sparkle: () => sample('glass_002', { vol: 0.45 }),
     panelOpen: () => sample('maximize_006', { vol: 0.35 }),
-    // Rising whoosh + bright stab when the winner spotlight opens.
-    spotlight() {
-      noise(0.5, { freq: 700, vol: 0.14, q: 0.4 });
-      tone(220, 0.45, { type: 'sawtooth', vol: 0.05, slide: 880 });
-      [784, 988, 1175].forEach((f) => tone(f, 0.5, { type: 'triangle', vol: 0.09, at: 0.42 }));
-    },
+    // Winner spotlight: silent; the round result is carried by win.mp3 / lose.mp3.
+    spotlight() {},
     swoosh: () => noise(0.32, { freq: 900, vol: 0.16, q: 0.5 }),
     pop: () => sample('pluck_001', { vol: 0.55 }) || (tone(740, 0.09, { type: 'sine', vol: 0.16, slide: 1180 }), tone(1180, 0.08, { type: 'triangle', vol: 0.06, at: 0.06 })),
     tick: () => sample('tick_002', { vol: 0.4 }) || tone(1320, 0.05, { type: 'square', vol: 0.05 }),
     lock: () => sample('confirmation_002', { vol: 0.55 }) || (tone(520, 0.08, { type: 'triangle', vol: 0.16 }), tone(780, 0.14, { type: 'triangle', vol: 0.14, at: 0.07 })),
     chips() { if (sample(CHIP_STACK, { vol: 0.6 })) return; for (let i = 0; i < 6; i++) tone(2400 + Math.random() * 1200, 0.07, { type: 'sine', vol: 0.08, at: i * 0.05 }); },
-    // Round result fanfares (win.mp3 / lose.mp3), synth as fallback.
-    win() {
-      if (muted || sample('win', { vol: 0.9 })) return;
-      [523, 659, 784, 1047, 1319].forEach((f, i) => tone(f, 0.3, { type: 'triangle', vol: 0.16, at: i * 0.08 }));
-      sample(['chips-collide-1', 'chips-collide-2'], { vol: 0.6, at: 0.1 }) || this.chips();
-    },
-    lose() {
-      if (muted || sample('lose', { vol: 0.9 })) return;
-      this.boom();
-    },
+    // Round result fanfares: only the team's win.mp3 / lose.mp3 (no synth).
+    win: () => sample('win', { vol: 0.9 }),
+    lose: () => sample('lose', { vol: 0.9 }),
     // Short low "uh-oh" (bomb blast for bystanders, etc.).
     boom() { tone(392, 0.35, { type: 'sawtooth', vol: 0.06, slide: 196 }); tone(311, 0.45, { type: 'triangle', vol: 0.1, at: 0.15, slide: 155 }); },
     split() { tone(660, 0.2, { type: 'triangle', vol: 0.14 }); tone(660, 0.25, { type: 'triangle', vol: 0.14, at: 0.18 }); },
     // Game-over popups: total_win.mp3 for the champion, total_lose.mp3 for the rest.
-    totalLose() {
-      if (muted || sample('total_lose', { vol: 0.9 })) return;
-      [392, 330, 262].forEach((f, i) => tone(f, 0.4, { type: 'triangle', vol: 0.12, at: i * 0.22 }));
-    },
-    fanfare() {
-      if (muted || sample('total_win', { vol: 0.9 })) return;
-      [392, 523, 659, 784, 659, 784, 1047].forEach((f, i) => tone(f, 0.28, { type: 'triangle', vol: 0.15, at: i * 0.11 }));
-      sample('confirmation_004', { vol: 0.5, at: 0.75 });
-      sample(['chips-collide-1', 'chips-collide-2'], { vol: 0.5, at: 0.4 });
-    },
+    totalLose: () => sample('total_lose', { vol: 0.9 }),
+    fanfare: () => sample('total_win', { vol: 0.9 }),
   };
 })();
 
