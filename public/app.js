@@ -24,6 +24,8 @@
   let bannerTimer = null;
 
   document.addEventListener('pointerdown', () => SFX.unlock(), { once: true });
+  // Lobby BGM from the start (browsers hold it until the first tap).
+  SFX.music(true);
 
   // ------------------------------------------------------------- helpers
   function toast(msg, ms = 2400) {
@@ -375,8 +377,16 @@
     boardKey = undefined;
     window.currentGameId = null;
     window.Chat && Chat.reset();
+    SFX.music(true);
+  }
+  // Game-over popup sound: total win for the champion, total lose for the other
+  // players (spectators hear nothing).
+  function gameoverSfx() {
+    if (!S || S.spectator) return;
+    if (S.final?.championId === S.me) SFX.fanfare(); else SFX.totalLose();
   }
   function showRoom() {
+    SFX.music(false);
     if ($('#room').classList.contains('active')) return;
     $('#lobby').classList.remove('active');
     $('#room').classList.add('active');
@@ -548,7 +558,7 @@
       renderBomb();
       renderActions(ctx);
       renderOverlay(ctx);
-      if (S.phase === 'gameover' && P?.phase !== 'gameover' && S.final?.championId === S.me) SFX.fanfare();
+      if (S.phase === 'gameover' && P?.phase !== 'gameover' ) gameoverSfx();
       if (S.notice && JSON.stringify(S.notice) !== JSON.stringify(P?.notice)) toast(I18N.msg(S.notice), 3500);
       fitRoom();
       return;
@@ -1528,7 +1538,8 @@
       $('#room').classList.remove('shake');
       reflow($('#room'));
       $('#room').classList.add('shake');
-      SFX.shuffle(); SFX.lose();
+      SFX.shuffle();
+      if (S.lastBoom.victim === S.me) SFX.lose(); else SFX.boom();
       if (S.lastBoom.victim === S.me && navigator.vibrate) navigator.vibrate([120, 60, 200]);
     }
 
@@ -1681,7 +1692,8 @@
       if (ph === 'play' && S.turn === S.me) SFX.select();
       if (ph === 'reveal' && rv) {
         SFX.spotlight();
-        setTimeout(() => (rv.lied ? SFX.lose() : SFX.win()), 450);
+        // From my side: whoever has to take the pile lost this round.
+        setTimeout(() => (S.spectator ? null : rv.taker === S.me ? SFX.lose() : SFX.win()), 450);
         const who = document.querySelector(`.iseat[data-id="${rv.by}"] .is-avatar`);
         setTimeout(() => window.FX?.at(who, rv.lied ? 'ko' : 'sparkle'), 300);
         const center = $('#lCenter');
@@ -1691,7 +1703,7 @@
           center.classList.add(rv.lied ? 'flash-lie' : 'flash-true');
         }
       }
-      if (ph === 'gameover' && S.final?.championId === S.me) SFX.fanfare();
+      if (ph === 'gameover' ) gameoverSfx();
     }
   }
 
@@ -1804,7 +1816,7 @@
     setTimeout(() => window.FX?.win(el.querySelector('.sp-avatar'), iWon), 250);
     confetti(el.querySelector('.sp-confetti'), iWon ? 170 : 90);
     SFX.spotlight();
-    setTimeout(() => (split ? SFX.split() : iWon ? SFX.win() : SFX.lose()), 650);
+    setTimeout(() => (split ? SFX.split() : iWon ? SFX.win() : S?.spectator ? null : SFX.lose()), 650);
     clearTimeout(openSpotlight._t);
     openSpotlight._t = setTimeout(() => closeSpotlight(), 4600);
   }
@@ -2063,7 +2075,7 @@
     }
     if (S.game === 'indian' || S.game === 'dual') {
       if (S.phase === 'bet' && P?.phase !== 'bet') { SFX.shuffle(); SFX.deal(); }
-      if (S.phase === 'gameover' && P?.phase !== 'gameover' && S.final?.championId === S.me) SFX.fanfare();
+      if (S.phase === 'gameover' && P?.phase !== 'gameover' ) gameoverSfx();
       return;
     }
     if (P?.phase === S.phase && P?.dealId === S.dealId) return;
@@ -2083,7 +2095,7 @@
         if (S.game !== 'nut') SFX.flipWave(16, 0.035, 0.9);
         break;
       case 'gameover':
-        if (S.final?.championId === S.me) SFX.fanfare();
+        gameoverSfx();
         break;
     }
   }

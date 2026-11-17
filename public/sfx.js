@@ -15,11 +15,27 @@ const SFX = (() => {
     'chips-handle-1', 'chips-handle-4', 'click_002', 'click_004', 'select_003', 'confirmation_002', 'confirmation_004', 'error_004',
     'maximize_006', 'open_002', 'pluck_001', 'drop_002', 'toggle_002', 'glass_002', 'bong_001', 'tick_002', 'minimize_006',
   ];
+  // Team-made sounds (/assets/sound/*.mp3): round win/lose stings, game-over
+  // popups and button clicks.
+  const CUSTOM = ['win', 'lose', 'total_win', 'total_lose', 'btn1', 'btn2'];
   const raw = {};      // name -> ArrayBuffer (fetched early)
   const buffers = {};  // name -> AudioBuffer (decoded once audio is unlocked)
-  for (const n of SAMPLES) {
-    fetch(`/assets/sfx/${n}.ogg`).then((r) => (r.ok ? r.arrayBuffer() : null)).then((b) => { if (b) { raw[n] = b; decode(n); } }).catch(() => {});
+  const load = (n, url) => fetch(url).then((r) => (r.ok ? r.arrayBuffer() : null)).then((b) => { if (b) { raw[n] = b; decode(n); } }).catch(() => {});
+  for (const n of SAMPLES) load(n, `/assets/sfx/${n}.ogg`);
+  for (const n of CUSTOM) load(n, `/assets/sound/${n}.mp3`);
+
+  // Lobby background music: a looping <audio> element, only while in the lobby.
+  const bgm = new Audio('/assets/sound/bgm_main.mp3');
+  bgm.loop = true;
+  bgm.preload = 'auto';
+  bgm.volume = 0.35;
+  let bgmWanted = false;
+  function syncBgm() {
+    if (bgmWanted && !muted) bgm.play().catch(() => {}); // blocked until the first tap; retried then
+    else bgm.pause();
   }
+  const kick = () => { syncBgm(); ac(); };
+  ['pointerdown', 'keydown', 'touchstart'].forEach((ev) => window.addEventListener(ev, kick, { passive: true }));
   function decode(n) {
     if (!ctx || !raw[n] || buffers[n]) return;
     const b = raw[n];
@@ -59,6 +75,7 @@ const SFX = (() => {
       const d = noiseBuf.getChannelData(0);
       for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
       for (const n of SAMPLES) decode(n);
+      for (const n of CUSTOM) decode(n);
     }
     if (ctx.state === 'suspended') ctx.resume();
     return ctx;
@@ -108,11 +125,14 @@ const SFX = (() => {
     toggleMute() {
       muted = !muted;
       try { localStorage.setItem('muted', muted ? '1' : '0'); } catch {}
+      syncBgm();
       return muted;
     },
+    // Lobby music on/off (called when entering / leaving a room).
+    music(on) { bgmWanted = !!on; syncBgm(); },
     sample,
-    click: () => sample(['click_002', 'click_004'], { vol: 0.5 }) || tone(880, 0.07, { type: 'triangle', vol: 0.12 }),
-    select: () => sample('select_003', { vol: 0.55 }) || (tone(660, 0.08, { type: 'triangle', vol: 0.14 }), tone(990, 0.1, { type: 'triangle', vol: 0.1, at: 0.05 })),
+    click: () => sample('btn1', { vol: 0.8, rate: 1 }) || sample(['click_002', 'click_004'], { vol: 0.5 }) || tone(880, 0.07, { type: 'triangle', vol: 0.12 }),
+    select: () => sample('btn2', { vol: 0.8 }) || sample('select_003', { vol: 0.55 }) || (tone(660, 0.08, { type: 'triangle', vol: 0.14 }), tone(990, 0.1, { type: 'triangle', vol: 0.1, at: 0.05 })),
     flip: (at = 0) => sample(CARD_PLACE, { vol: 0.45, at }) || noise(0.06, { at, freq: 3200, vol: 0.22, q: 1.2 }),
     // many cards at once: a few real card sounds spread over the wave
     flipWave(n = 16, gap = 0.04, start = 0) {
@@ -151,15 +171,26 @@ const SFX = (() => {
     tick: () => sample('tick_002', { vol: 0.4 }) || tone(1320, 0.05, { type: 'square', vol: 0.05 }),
     lock: () => sample('confirmation_002', { vol: 0.55 }) || (tone(520, 0.08, { type: 'triangle', vol: 0.16 }), tone(780, 0.14, { type: 'triangle', vol: 0.14, at: 0.07 })),
     chips() { if (sample(CHIP_STACK, { vol: 0.6 })) return; for (let i = 0; i < 6; i++) tone(2400 + Math.random() * 1200, 0.07, { type: 'sine', vol: 0.08, at: i * 0.05 }); },
+    // Round result fanfares (win.mp3 / lose.mp3), synth as fallback.
     win() {
+      if (muted || sample('win', { vol: 0.9 })) return;
       [523, 659, 784, 1047, 1319].forEach((f, i) => tone(f, 0.3, { type: 'triangle', vol: 0.16, at: i * 0.08 }));
       sample(['chips-collide-1', 'chips-collide-2'], { vol: 0.6, at: 0.1 }) || this.chips();
-      sample(CHIP_STACK, { vol: 0.55, at: 0.45 });
-      sample('glass_002', { vol: 0.4, at: 0.3 });
     },
-    lose() { tone(392, 0.35, { type: 'sawtooth', vol: 0.06, slide: 196 }); tone(311, 0.45, { type: 'triangle', vol: 0.1, at: 0.15, slide: 155 }); },
+    lose() {
+      if (muted || sample('lose', { vol: 0.9 })) return;
+      this.boom();
+    },
+    // Short low "uh-oh" (bomb blast for bystanders, etc.).
+    boom() { tone(392, 0.35, { type: 'sawtooth', vol: 0.06, slide: 196 }); tone(311, 0.45, { type: 'triangle', vol: 0.1, at: 0.15, slide: 155 }); },
     split() { tone(660, 0.2, { type: 'triangle', vol: 0.14 }); tone(660, 0.25, { type: 'triangle', vol: 0.14, at: 0.18 }); },
+    // Game-over popups: total_win.mp3 for the champion, total_lose.mp3 for the rest.
+    totalLose() {
+      if (muted || sample('total_lose', { vol: 0.9 })) return;
+      [392, 330, 262].forEach((f, i) => tone(f, 0.4, { type: 'triangle', vol: 0.12, at: i * 0.22 }));
+    },
     fanfare() {
+      if (muted || sample('total_win', { vol: 0.9 })) return;
       [392, 523, 659, 784, 659, 784, 1047].forEach((f, i) => tone(f, 0.28, { type: 'triangle', vol: 0.15, at: i * 0.11 }));
       sample('confirmation_004', { vol: 0.5, at: 0.75 });
       sample(['chips-collide-1', 'chips-collide-2'], { vol: 0.5, at: 0.4 });
