@@ -24,17 +24,48 @@ const SFX = (() => {
   for (const n of SAMPLES) load(n, `/assets/sfx/${n}.ogg`);
   for (const n of CUSTOM) load(n, `/assets/sound/${n}.mp3`);
 
-  // Lobby background music: a looping <audio> element, only while in the lobby.
-  const bgm = new Audio('/assets/sound/bgm_main.mp3');
-  bgm.loop = true;
-  bgm.preload = 'auto';
-  bgm.volume = 0.35;
+  // Lobby background music (only while in the lobby). The .ogg is decoded once
+  // and looped as a WebAudio buffer, which is sample-accurate (no gap at the loop
+  // point). If a browser can't decode .ogg, fall back to the .mp3 in <audio loop>.
+  const BGM_VOL = 0.35;
+  let bgmRaw = null, bgmBuf = null, bgmSrc = null, bgmGain = null, bgmEl = null, bgmFailed = false;
   let bgmWanted = false;
-  function syncBgm() {
-    if (bgmWanted && !muted) bgm.play().catch(() => {}); // blocked until the first tap; retried then
-    else bgm.pause();
+  fetch('/assets/sound/bgm_main.ogg').then((r) => (r.ok ? r.arrayBuffer() : null)).then((b) => { bgmRaw = b; if (!b) bgmFailed = true; decodeBgm(); }).catch(() => { bgmFailed = true; });
+  function decodeBgm() {
+    if (!ctx || !bgmRaw) return;
+    const b = bgmRaw;
+    bgmRaw = null;
+    ctx.decodeAudioData(b, (buf) => { bgmBuf = buf; syncBgm(); }, () => { bgmFailed = true; syncBgm(); });
   }
-  const kick = () => { syncBgm(); ac(); };
+  function fallbackEl() {
+    if (!bgmEl) { bgmEl = new Audio('/assets/sound/bgm_main.mp3'); bgmEl.loop = true; bgmEl.volume = BGM_VOL; }
+    return bgmEl;
+  }
+  function syncBgm() {
+    const on = bgmWanted && !muted;
+    if (bgmBuf && ctx) {
+      if (on && !bgmSrc) {
+        bgmGain = ctx.createGain();
+        bgmGain.gain.value = BGM_VOL;
+        bgmGain.connect(ctx.destination);
+        bgmSrc = ctx.createBufferSource();
+        bgmSrc.buffer = bgmBuf;
+        bgmSrc.loop = true;
+        bgmSrc.connect(bgmGain);
+        bgmSrc.start();
+      } else if (!on && bgmSrc) {
+        try { bgmSrc.stop(); } catch {}
+        bgmSrc.disconnect(); bgmGain.disconnect();
+        bgmSrc = bgmGain = null;
+      }
+      return;
+    }
+    if (bgmFailed) {
+      if (on) fallbackEl().play().catch(() => {}); // blocked until the first tap; retried then
+      else bgmEl?.pause();
+    }
+  }
+  const kick = () => { ac(); syncBgm(); };
   ['pointerdown', 'keydown', 'touchstart'].forEach((ev) => window.addEventListener(ev, kick, { passive: true }));
   function decode(n) {
     if (!ctx || !raw[n] || buffers[n]) return;
@@ -76,6 +107,7 @@ const SFX = (() => {
       for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
       for (const n of SAMPLES) decode(n);
       for (const n of CUSTOM) decode(n);
+      decodeBgm();
     }
     if (ctx.state === 'suspended') ctx.resume();
     return ctx;
