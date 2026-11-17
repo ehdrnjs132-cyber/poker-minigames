@@ -211,7 +211,6 @@
         burst(x, y, 'win');
         lottieOnce('coins-fall', { x, y: y - 60, size: 240, z: 65 });
       }
-      if (mine) setTimeout(() => window.SFX?.sparkle?.(), 400);
     },
     // Game over: trophy for the champion
     champion(mine) {

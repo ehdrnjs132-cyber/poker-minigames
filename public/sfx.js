@@ -188,7 +188,6 @@ const SFX = (() => {
       sample('chips-handle-1', { vol: 0.6 });
       sample(['chips-collide-1', 'chips-collide-2'], { vol: 0.7, at: 0.18 });
       sample(CHIP_STACK, { vol: 0.6, at: 0.42 });
-      tone(220, 0.6, { type: 'sawtooth', vol: 0.05, slide: 660, at: 0.05 });
     },
     sparkle: () => sample('glass_002', { vol: 0.45 }),
     panelOpen: () => sample('maximize_006', { vol: 0.35 }),
@@ -204,7 +203,7 @@ const SFX = (() => {
     lose: () => sample('lose', { vol: 0.9 }),
     // Short low "uh-oh" (bomb blast for bystanders, etc.).
     boom() { tone(392, 0.35, { type: 'sawtooth', vol: 0.06, slide: 196 }); tone(311, 0.45, { type: 'triangle', vol: 0.1, at: 0.15, slide: 155 }); },
-    split() { tone(660, 0.2, { type: 'triangle', vol: 0.14 }); tone(660, 0.25, { type: 'triangle', vol: 0.14, at: 0.18 }); },
+    split() {}, // ties: no synth sting
     // Game-over popups: total_win.mp3 for the champion, total_lose.mp3 for the rest.
     totalLose: () => sample('total_lose', { vol: 0.9 }),
     fanfare: () => sample('total_win', { vol: 0.9 }),
